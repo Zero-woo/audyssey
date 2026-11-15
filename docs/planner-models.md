@@ -1,7 +1,7 @@
 # 플래너 모델 조사: 지원 모델, 입력 구조, 비용
 
 2026-11-15 기준 공식 문서 조사입니다. 가격과 모델 목록은 자주 바뀌므로 쓰기 전에 [출처](#출처)의 원문을 다시 확인합니다.
-플래너와 검증기는 같은 설정(`AUDYSSEY_PLANNER_*`)을 쓰므로 아래 선택은 둘에 함께 적용됩니다.
+플래너는 `AUDYSSEY_PLANNER_*`, 검증기는 `AUDYSSEY_VALIDATOR_*`(비우면 플래너 값)로 각각 고릅니다.
 
 ## 요약
 
@@ -12,9 +12,9 @@
 | OpenAI API | 안 됨. 공식 권장은 프레임 샘플링 | 프레임마다 시각 텍스트 | 비전 모델은 오디오 입력 없음 | `AUDYSSEY_PLANNER_API=openai`, `INPUT=frames` |
 | vLLM (Qwen-VL, Qwen-Omni) | 됨. `video_url` + 요청별 fps | Qwen2.5-VL은 절대 시간 mRoPE, Qwen3-VL은 프레임 시각 텍스트 | Omni만 (`use_audio_in_video`) | `AUDYSSEY_PLANNER_API=openai`, `INPUT=video` |
 
-## 현재 입력 방식 (frames)
+## 이미지 입력 방식 (frames)
 
-- `AUDYSSEY_PLANNER_FRAMES`장(기본 4)을 영상 전체에서 고르게 뽑습니다. fps가 아니라 **총 장수**입니다. 7초 영상이면 약 1.8초 간격입니다.
+- `AUDYSSEY_PLANNER_FPS`(기본 1)로 프레임을 뽑습니다. 7초 영상은 1fps면 7장입니다. 한 요청 최대 `AUDYSSEY_PLANNER_MAX_FRAMES`장(기본 32)이고, 넘으면 실제 fps가 낮아집니다.
 - 각 구간의 중간 시점에서 한 장씩, 가로 최대 512px JPEG로 뽑습니다(`media.extract_frames`).
 - 순서는 메시지 안의 위치와 텍스트로 알려 줍니다. 이미지마다 바로 앞에 `Frame at 1.78 seconds` 텍스트 파트를 붙여 시간순으로 보냅니다.
 - 오디오는 보내지 않습니다.
@@ -139,6 +139,48 @@ client.chat.completions.create(
 - 메모리(transformers BF16, talker 포함, 30초 영상): Qwen2.5-Omni-3B 22.4GB, 7B 41.9GB, Qwen3-Omni-30B-A3B-Instruct 88.5GB. vLLM 수치는 없습니다.
 - 비용은 GPU 사용 시간뿐입니다.
 
+## Qwen2.5-Omni와 Qwen3-Omni 비교
+
+지금은 `Qwen/Qwen2.5-Omni-3B`(공용 캐시에 있음)를 쓰고, 이후 `Qwen3-Omni-30B-A3B`로 바꿀 수 있습니다. vLLM v0.32.0 코드와 공식 모델 카드 기준입니다.
+
+| | Qwen2.5-Omni-3B | Qwen3-Omni-30B-A3B (Instruct / Thinking) |
+|---|---|---|
+| vLLM에서 도는 부분 | thinker만 (텍스트 출력) | thinker만 (텍스트 출력) |
+| 입력 | 텍스트, 이미지 여러 장, 영상, 오디오 | 같음 |
+| 영상의 오디오 (`use_audio_in_video`) | 됨 (vLLM 서버 테스트 있음, 이번에 실제 확인) | v0.32 코드와 전처리 테스트는 지원. 서버 경로 테스트는 없음 (확인 필요). Qwen3-Omni README의 "vLLM serve에서 안 됨"은 이전 버전 기준으로 보임 |
+| 시간 인코딩 | TMRoPE, 2초 단위로 영상·오디오 교차 | 타임스탬프 기준으로 토큰마다 교차 |
+| 이미지 패치 | 14px | 16px (프레임당 토큰 수가 달라짐) |
+| 오디오 | 16kHz 모노, 항목당 최대 300초 | 같음 |
+| 컨텍스트 | 32,768 | 65,536 |
+| 기본 시스템 프롬프트 | 없으면 템플릿이 "You are a helpful assistant."를 넣음 | 넣지 않음 |
+| 메모리 (transformers BF16, 30초 영상) | 22.4GB | Instruct 88.5GB, Thinking 77.8GB |
+| 권장 서버 인자 | `--max-model-len 16384 --trust-request-mm-kwargs` | `--max-model-len 32768 -tp 1 --trust-request-mm-kwargs` |
+
+- 요청 형식(`image_url`, `video_url`, `mm_processor_kwargs.use_audio_in_video`)은 둘이 같아서 **코드 변경 없이 모델 ID만 바꾸면 됩니다**.
+- Thinking 모델은 `<think>...</think>`를 내므로 JSON 검수에는 Instruct를 권장합니다. `--reasoning-parser qwen3`가 Omni Thinking에 맞는지는 확인되지 않았습니다.
+- Captioner는 오디오만 받고 텍스트 프롬프트를 받지 않아 플래너나 검증기로 쓸 수 없습니다.
+- `use_audio_in_video`를 켤 때는 영상에 오디오 트랙이 있어야 하고, 별도 `audio_url`을 함께 넣으면 오류가 납니다.
+
+## 실측: Qwen2.5-Omni-3B, Qwen3-VL-8B (2026-11-15)
+
+sv3-a100 GPU 7, vLLM v0.32.0, `samples/sample.mp4`(7.1초, 칼로 공격하는 게임 장면). 3B·8B 모델이라 결과 품질은 참고용입니다.
+
+| 플래너 | 검증기 | 결과 |
+|---|---|---|
+| Omni-3B, 영상+오디오, fps 2 | 같음 | 플래너 5초: "swing sound and grunting" 등 3개. 검증기 9.9초: 3개 모두 not_found (근거 문장이 엉뚱함) |
+| Omni-3B, frames, fps 1 | 같음 | 한 번은 유효한 소스가 없어 실패, 다시 하면 1개(7장, 입력 1,851토큰) |
+| Gemini 3.5 Flash-Lite, 영상+오디오, fps 2 | Omni-3B, 영상+오디오 | 플래너 "sword slash", "grunt". 검증기 5.9초, 1개 not_found |
+| Gemini 3.5 Flash-Lite, 영상+오디오 | Omni-3B, frames, fps 2 | 검증기 3.5초, 2개 not_found. 근거가 "있다"는 문장인데 present=false로 답한 경우 있음 |
+| Qwen3-VL-8B, frames, fps 1 | 같음 | 플래너 9초 소스 4개, 검증기 0.9초 1개 not_found |
+| Qwen3-VL-8B, frames, fps 2 | 같음 | 플래너 10.4초. 프레임 간격을 그대로 구간으로 내놓는 경향 |
+| Qwen3-VL-8B, 영상, fps 2 | Qwen3-VL-8B, frames | 플래너 4.4초, 소스 3개, 문제 없음 |
+| Qwen3-VL-8B, frames, fps 2 | Omni-3B, 영상+오디오 | 검증기 4.4초, 2개 not_found ("소리가 안 들림") |
+
+- 두 모델 모두 이미지 입력과 영상 입력이 동작하고, 플래너와 검증기를 서로 다른 서버로 나눠도 동작했습니다.
+- Qwen3-VL-8B는 플래너로 형식은 안정적이었지만 소리 원인을 캐릭터 단위로 잡는 경향이 있었습니다.
+- Omni-3B는 오디오를 들어 소리를 구분했지만, 검증 근거와 판정이 어긋나는 경우가 있었습니다. 더 큰 모델(Qwen3-Omni-30B-A3B)로 바꿔 확인할 가치가 있습니다.
+- GPU 메모리: 두 서버를 한 장에 띄워(0.35 + 0.4) 약 60GB.
+
 ## 출처
 
 **Gemini**
@@ -156,3 +198,5 @@ client.chat.completions.create(
 - [vLLM 멀티모달 입력 v0.32.0](https://docs.vllm.ai/en/v0.32.0/features/multimodal_inputs/), [엔진 인자](https://docs.vllm.ai/en/v0.32.0/configuration/engine_args/), [지원 모델](https://docs.vllm.ai/en/v0.32.0/models/supported_models/), [구조화 출력](https://docs.vllm.ai/en/v0.32.0/features/structured_outputs/)
 - [vLLM `use_audio_in_video` 테스트](https://github.com/vllm-project/vllm/blob/v0.32.0/tests/entrypoints/multimodal/openai/chat_completion/test_audio_in_video.py)
 - [Qwen2.5-VL-3B](https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct), [Qwen3-VL](https://github.com/QwenLM/Qwen3-VL), [Qwen2.5-Omni](https://github.com/QwenLM/Qwen2.5-Omni), [Qwen3-Omni](https://github.com/QwenLM/Qwen3-Omni)
+- [Qwen2.5-Omni-3B 카드](https://huggingface.co/Qwen/Qwen2.5-Omni-3B), [Qwen3-Omni-30B-A3B-Instruct 카드](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct), [Qwen3-Omni-30B-A3B-Thinking 카드](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Thinking)
+- [vLLM qwen2_5_omni_thinker.py](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/models/qwen2_5_omni_thinker.py), [qwen3_omni_moe_thinker.py](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/models/qwen3_omni_moe_thinker.py), [전처리 테스트](https://github.com/vllm-project/vllm/blob/v0.32.0/tests/models/multimodal/processing/test_audio_in_video.py)
