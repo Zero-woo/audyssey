@@ -81,13 +81,31 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(grounder='unknown')
 
-    def test_planner_frames_bounds_and_env(self):
-        self.assertEqual(Settings().planner_frames, 4)
-        with patch.dict(os.environ, AUDYSSEY_PLANNER_FRAMES="8"):
-            self.assertEqual(Settings().planner_frames, 8)
-        for count in (0, 17):
+    def test_planner_max_frames_bounds_and_env(self):
+        self.assertEqual(Settings().planner_max_frames, 32)
+        with patch.dict(os.environ, AUDYSSEY_PLANNER_MAX_FRAMES="8"):
+            self.assertEqual(Settings().planner_max_frames, 8)
+        for count in (0, 257):
             with self.assertRaises(ValidationError):
-                Settings(planner_frames=count)
+                Settings(planner_max_frames=count)
+
+    def test_validator_endpoint_falls_back_to_planner(self):
+        settings = Settings(planner_base_url="http://planner/v1", planner_model="p",
+                            planner_api_key="k", planner_fps=2)
+        self.assertEqual(settings.validator_endpoint(), settings.planner_endpoint())
+        env = {"AUDYSSEY_VALIDATOR_BASE_URL": "http://validator/v1", "AUDYSSEY_VALIDATOR_MODEL": "v",
+               "AUDYSSEY_VALIDATOR_INPUT": "video", "AUDYSSEY_VALIDATOR_VIDEO_AUDIO": "true"}
+        with patch.dict(os.environ, env):
+            settings = Settings(planner_base_url="http://planner/v1", planner_model="p",
+                                planner_api_key="k", planner_fps=2)
+        validator = settings.validator_endpoint()
+        self.assertEqual((validator.base_url, validator.model, validator.input, validator.video_audio),
+                         ("http://validator/v1", "v", "video", True))
+        self.assertEqual((validator.api_key, validator.fps, validator.api), ("k", 2, "openai"))
+        self.assertEqual(settings.planner_endpoint().model, "p")
+        with self.assertRaises(ValidationError):
+            Settings(validator_api="gemini")
+        Settings(validator_api="gemini", validator_input="video")
 
     def test_planner_input_settings(self):
         settings = Settings()

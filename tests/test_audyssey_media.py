@@ -104,6 +104,17 @@ class MediaTests(unittest.TestCase):
                 self.assertAlmostEqual(duration, probe(wide)[0], delta=0.2)
                 self.assertEqual(channels, 1 if audio else 0)
 
+    def test_frames_and_clips_cover_a_time_range(self):
+        from audyssey.media import MediaError, extract_frames, planner_clip, probe
+
+        frames = extract_frames(self.video, 2, self.root / "range", 1.0, 2.0)
+        self.assertEqual([time for time, _ in frames], [1.25, 1.75])
+        clip = planner_clip(self.video, self.root / "range.mp4", True, 1.0, 2.0)
+        self.assertAlmostEqual(probe(clip)[0], 1.0, delta=0.15)
+        for start, end in [(2.0, 1.0), (5.0, None)]:
+            with self.assertRaises(MediaError):
+                extract_frames(self.video, 1, self.root / "bad", start, end)
+
     def test_extract_frames_downscales_and_handles_short_video(self):
         from audyssey.media import extract_frames
 

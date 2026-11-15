@@ -242,10 +242,27 @@ AUDYSSEY_GENERATOR=remote AUDYSSEY_GENERATOR_URL=http://127.0.0.1:8701 uv run au
 
 ## 플래너 연결 (Gemini, vLLM)
 
-플래너 real(`planning/real.py`)과 검증기는 같은 설정으로 같은 모델을 부릅니다. 입력은 두 가지입니다.
+플래너 real(`planning/real.py`)은 영상 전체를 보고 소스 목록을 만듭니다. 입력은 두 가지입니다.
 
-- `frames`(기본): 영상 전체에서 고르게 뽑은 JPEG `AUDYSSEY_PLANNER_FRAMES`장(기본 4)을 보냅니다. 이미지마다 앞에 `Frame at <초> seconds` 텍스트를 붙여 순서와 시각을 알립니다. 오디오는 보내지 않습니다.
+- `frames`(기본): `AUDYSSEY_PLANNER_FPS`로 JPEG를 뽑아 보냅니다(최대 `AUDYSSEY_PLANNER_MAX_FRAMES`장, 넘으면 실제 fps가 낮아짐). 이미지마다 앞에 `Frame at <초> seconds` 텍스트를 붙여 순서와 시각을 알립니다. 오디오는 보내지 않습니다.
 - `video`: 영상을 가로 512px로 다시 인코딩해 한 개의 영상으로 보내고, 모델이 `AUDYSSEY_PLANNER_FPS`로 샘플링합니다. `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`면 오디오 트랙도 함께 보냅니다.
+
+검증기(`validate_plan`)는 소스마다 한 번씩, 그 소스의 구간만 모델에 보여 주고 `present: true/false`를 묻습니다.
+
+- 구간마다 `frames`면 그 구간에서 fps로 뽑은 프레임을, `video`면 그 구간을 잘라 낸 클립을 보냅니다. 구간이 없으면 영상 전체를 씁니다.
+- 오디오가 없으면 "보이는가(소리를 내는 대상이나 동작)"를, 오디오가 있으면 "보이거나 들리는가"를 묻습니다. 오디오가 없을 때 `music`, `ambience`는 볼 근거가 없어 건너뜁니다.
+- `present: false`면 `not_found` 문제로 보고하고, 플래너가 다시 계획합니다. JSON이 두 번 틀리면 그 소스는 있다고 보고 넘어갑니다.
+- 모델은 `AUDYSSEY_VALIDATOR_*`로 플래너와 따로 고릅니다. 비워 둔 값은 플래너 값을 씁니다. 예를 들어 플래너는 Gemini, 검증기는 vLLM의 Qwen2.5-Omni로 둘 수 있습니다. 검증기용 vLLM은 Compose에 없으니 따로 띄웁니다(아래 예).
+
+```bash
+docker run -d --name validator-vllm --gpus '"device=0"' --user 10001:10001 \
+  -e HF_HUB_OFFLINE=1 -e HF_HOME=/hf -e HOME=/tmp/vllm -v "$HF_CACHE:/hf:ro" \
+  --network audyssey_default vllm/vllm-openai:v0.32.0 \
+  --model Qwen/Qwen2.5-Omni-3B --gpu-memory-utilization 0.35 --max-model-len 16384 \
+  --trust-request-mm-kwargs
+# .env: AUDYSSEY_VALIDATOR_BASE_URL=http://validator-vllm:8000/v1, AUDYSSEY_VALIDATOR_MODEL=Qwen/Qwen2.5-Omni-3B,
+#       AUDYSSEY_VALIDATOR_API=openai, AUDYSSEY_VALIDATOR_API_KEY=unused, AUDYSSEY_VALIDATOR_INPUT=video, AUDYSSEY_VALIDATOR_VIDEO_AUDIO=true
+```
 
 공급자별 지원 모델, 입력 구조, 비용은 [플래너 모델 조사](planner-models.md)에 있습니다.
 
@@ -359,9 +376,10 @@ LANGSMITH_PROJECT=audyssey
 | `AUDYSSEY_PLANNER_BASE_URL` / `AUDYSSEY_PLANNER_MODEL` / `AUDYSSEY_PLANNER_API_KEY` | 빈 값 | OpenAI 호환 플래너 주소, 모델, 키 |
 | `AUDYSSEY_PLANNER_API` | `openai` | `openai`(Chat Completions: OpenAI, vLLM, Gemini OpenAI 호환) 또는 `gemini`(네이티브 API, `video` 입력만) |
 | `AUDYSSEY_PLANNER_INPUT` | `frames` | `frames`(이미지 여러 장) 또는 `video`(영상 하나) |
-| `AUDYSSEY_PLANNER_FRAMES` | `4` | `frames` 입력에서 보내는 프레임 수 (1~16) |
-| `AUDYSSEY_PLANNER_FPS` | `1` | `video` 입력에서 모델이 샘플링하는 fps (0 초과~30) |
+| `AUDYSSEY_PLANNER_FPS` | `1` | `frames`면 프레임을 뽑는 fps, `video`면 모델이 샘플링하는 fps (0 초과~30) |
+| `AUDYSSEY_PLANNER_MAX_FRAMES` | `32` | `frames` 입력에서 한 요청에 보내는 최대 프레임 수 (1~256, 검증기도 같은 값) |
 | `AUDYSSEY_PLANNER_VIDEO_AUDIO` | `false` | `video` 입력에 오디오 트랙 포함 (Gemini, vLLM Qwen-Omni) |
+| `AUDYSSEY_VALIDATOR_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` / `_INPUT` / `_FPS` / `_VIDEO_AUDIO` | 플래너 값 | 검증기 모델과 입력. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀 |
 
 **흐름과 작업**
 

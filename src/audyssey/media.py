@@ -101,11 +101,32 @@ def compute_peaks(wav: Path, buckets: int = 800) -> list[float]:
     ]
 
 
-def extract_frames(video: Path, count: int, out_dir: Path) -> list[tuple[float, Path]]:
-    """Sample one JPEG at each equal interval's midpoint (frame-rate rounded)."""
+def _window(video: Path, start: float, end: float | None) -> tuple[float, list[str]]:
+    """Length of [start, end) clamped to the video, and ffmpeg args selecting it."""
+    duration, _ = probe(video)
+    end = duration if end is None else min(end, duration)
+    if not 0 <= start < end:
+        raise MediaError("time range must be non-empty and inside the video")
+    return end - start, [
+        "-ss",
+        f"{start:g}",
+        "-t",
+        f"{end - start:g}",
+        "-i",
+        str(video),
+    ]
+
+
+def extract_frames(
+    video: Path, count: int, out_dir: Path, start: float = 0, end: float | None = None
+) -> list[tuple[float, Path]]:
+    """Sample one JPEG at each equal interval's midpoint (frame-rate rounded).
+
+    Times are seconds from the start of the video, within [start, end).
+    """
     if count < 1:
         raise ValueError("frame count must be positive")
-    duration, _ = probe(video)
+    length, window = _window(video, start, end)
     out_dir.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run(
@@ -114,13 +135,12 @@ def extract_frames(video: Path, count: int, out_dir: Path) -> list[tuple[float, 
                 "-v",
                 "error",
                 "-y",
-                "-i",
-                str(video),
+                *window,
                 "-vf",
-                f"fps={count / duration},scale='min(512,iw)':-1",
+                f"fps={count / length},scale='min(512,iw)':-1",
                 "-frames:v",
                 str(count),
-                str(out_dir / "%02d.jpg"),
+                str(out_dir / "%03d.jpg"),
             ],
             check=True,
             capture_output=True,
@@ -132,7 +152,7 @@ def extract_frames(video: Path, count: int, out_dir: Path) -> list[tuple[float, 
         )
         raise MediaError(message) from exc
     frames = [
-        ((i + 0.5) * duration / count, out_dir / f"{i + 1:02d}.jpg")
+        (start + (i + 0.5) * length / count, out_dir / f"{i + 1:03d}.jpg")
         for i in range(count)
     ]
     if any(not path.is_file() for _, path in frames):
@@ -140,8 +160,12 @@ def extract_frames(video: Path, count: int, out_dir: Path) -> list[tuple[float, 
     return frames
 
 
-def planner_clip(video: Path, out: Path, audio: bool) -> Path:
-    """Re-encode small enough to send inline: 512 px wide like the frames, mono audio or none."""
+def planner_clip(
+    video: Path, out: Path, audio: bool, start: float = 0, end: float | None = None
+) -> Path:
+    """Re-encode [start, end) small enough to send inline: 512 px wide like the
+    frames, mono audio or none."""
+    _, window = _window(video, start, end)
     out.parent.mkdir(parents=True, exist_ok=True)
     audio_args = ["-ac", "1", "-c:a", "aac", "-b:a", "48k"] if audio else ["-an"]
     try:
@@ -151,8 +175,7 @@ def planner_clip(video: Path, out: Path, audio: bool) -> Path:
                 "-v",
                 "error",
                 "-y",
-                "-i",
-                str(video),
+                *window,
                 "-vf",
                 "scale='min(512,iw)':-2",
                 "-c:v",

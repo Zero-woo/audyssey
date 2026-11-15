@@ -1,8 +1,25 @@
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+Api = Literal["openai", "gemini"]
+Input = Literal["frames", "video"]
+
+
+class LLMEndpoint(BaseModel):
+    """One model the planner or validator calls, resolved from settings."""
+
+    api: Api
+    base_url: str
+    model: str
+    api_key: str = Field(repr=False)
+    input: Input
+    fps: float
+    max_frames: int
+    video_audio: bool
 
 
 class Settings(BaseSettings):
@@ -40,18 +57,28 @@ class Settings(BaseSettings):
     tool_token: str = Field(default="", repr=False)
     remote_timeout_s: float = Field(default=600, gt=0)
     planner_base_url: str = ""
-    planner_frames: int = Field(default=4, ge=1, le=16)
     planner_model: str = ""
     planner_api_key: str = Field(default="", repr=False)
     # openai: Chat Completions (OpenAI, vLLM, Gemini's OpenAI endpoint).
     # gemini: native generateContent, the only Gemini path that accepts video.
-    planner_api: Literal["openai", "gemini"] = "openai"
-    # frames: planner_frames JPEGs. video: one downscaled clip sampled at planner_fps
-    # (vLLM video_url or Gemini inline video; OpenAI's API takes frames only).
-    planner_input: Literal["frames", "video"] = "frames"
+    planner_api: Api = "openai"
+    # frames: JPEGs sampled at planner_fps. video: one downscaled clip the model
+    # samples at planner_fps (vLLM video_url or Gemini inline video; the OpenAI
+    # API takes frames only).
+    planner_input: Input = "frames"
     planner_fps: float = Field(default=1, gt=0, le=30)
+    # Frames input: cap per request, so long spans lower the effective fps.
+    planner_max_frames: int = Field(default=32, ge=1, le=256)
     # Video input only: keep the clip's audio (Gemini, or vLLM Omni use_audio_in_video).
     planner_video_audio: bool = False
+    # Validator model; each unset value falls back to the planner's.
+    validator_api: Api | None = None
+    validator_base_url: str | None = None
+    validator_model: str | None = None
+    validator_api_key: str | None = Field(default=None, repr=False)
+    validator_input: Input | None = None
+    validator_fps: float | None = Field(default=None, gt=0, le=30)
+    validator_video_audio: bool | None = None
     max_plan_rounds: int = Field(default=2, ge=1)
     max_separation_retries: int = Field(default=2, ge=0)
     max_duration_s: float = Field(default=30, gt=0)
@@ -70,10 +97,41 @@ class Settings(BaseSettings):
     sam_audio_imagebind_checkpoint: str = ""
     judge_pass_threshold: float = 0.5
 
+    def planner_endpoint(self) -> LLMEndpoint:
+        return LLMEndpoint(
+            api=self.planner_api,
+            base_url=self.planner_base_url,
+            model=self.planner_model,
+            api_key=self.planner_api_key,
+            input=self.planner_input,
+            fps=self.planner_fps,
+            max_frames=self.planner_max_frames,
+            video_audio=self.planner_video_audio,
+        )
+
+    def validator_endpoint(self) -> LLMEndpoint:
+        planner = self.planner_endpoint()
+        overrides = {
+            "api": self.validator_api,
+            "base_url": self.validator_base_url,
+            "model": self.validator_model,
+            "api_key": self.validator_api_key,
+            "input": self.validator_input,
+            "fps": self.validator_fps,
+            "video_audio": self.validator_video_audio,
+        }
+        return planner.model_copy(
+            update={k: v for k, v in overrides.items() if v is not None}
+        )
+
     @model_validator(mode="after")
     def _gemini_takes_video(self) -> Self:
-        if self.planner_api == "gemini" and self.planner_input != "video":
-            raise ValueError(
-                "AUDYSSEY_PLANNER_API=gemini requires AUDYSSEY_PLANNER_INPUT=video"
-            )
+        for name, endpoint in [
+            ("PLANNER", self.planner_endpoint()),
+            ("VALIDATOR", self.validator_endpoint()),
+        ]:
+            if endpoint.api == "gemini" and endpoint.input != "video":
+                raise ValueError(
+                    f"AUDYSSEY_{name}_API=gemini requires AUDYSSEY_{name}_INPUT=video"
+                )
         return self

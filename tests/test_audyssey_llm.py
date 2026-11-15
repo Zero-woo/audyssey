@@ -7,7 +7,7 @@ from audyssey.tools.planning.llm import chat_client
 class LlmTests(unittest.TestCase):
     def test_chat_client_uses_settings(self):
         settings = Settings(planner_base_url='http://llm/v1', planner_model='m', planner_api_key='secret-planner-key')
-        with chat_client(settings) as client:
+        with chat_client(settings.planner_endpoint()) as client:
             self.assertEqual(str(client.base_url), 'http://llm/v1/')
             self.assertEqual(client.api_key, 'secret-planner-key')
             from langsmith import Client
@@ -29,10 +29,10 @@ class LlmTests(unittest.TestCase):
 
     def test_chat_client_requires_base_url(self):
         with self.assertRaises(ValueError):
-            chat_client(Settings(planner_base_url=''))
+            chat_client(Settings(planner_base_url='').planner_endpoint())
 
     def test_chat_client_allows_keyless_local_server(self):
-        with chat_client(Settings(planner_base_url='http://localhost:8000/v1', planner_api_key='')) as client:
+        with chat_client(Settings(planner_base_url='http://localhost:8000/v1', planner_api_key='').planner_endpoint()) as client:
             self.assertEqual(client.api_key, 'unused')
 
     def test_provider_errors_exclude_keys_from_exceptions_and_traces(self):
@@ -46,7 +46,7 @@ class LlmTests(unittest.TestCase):
         trace_client = Mock(spec=Client)
         def respond(request):
             return sdk_httpx.Response(401, json={'error': {'message': 'Invalid API key: ' + key}})
-        with chat_client(settings, transport=sdk_httpx.MockTransport(respond)) as client:
+        with chat_client(settings.planner_endpoint(), transport=sdk_httpx.MockTransport(respond)) as client:
             with tracing_context(enabled=True, client=trace_client):
                 with self.assertRaises(AuthenticationError) as caught:
                     client.chat.completions.create(model='m', messages=[{'role': 'user', 'content': 'hello'}])

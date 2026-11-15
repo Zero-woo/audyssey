@@ -2,7 +2,7 @@ import httpx2
 from langsmith.wrappers import wrap_openai
 from openai import DefaultHttpxClient, OpenAI
 
-from audyssey.settings import Settings
+from audyssey.settings import LLMEndpoint
 
 
 class _MaskKey(httpx2.BaseTransport):
@@ -29,36 +29,39 @@ class _MaskKey(httpx2.BaseTransport):
         self.inner.close()
 
 
+def _require_url(endpoint: LLMEndpoint) -> None:
+    if not endpoint.base_url.strip():
+        raise ValueError(
+            "AUDYSSEY_PLANNER_BASE_URL (or AUDYSSEY_VALIDATOR_BASE_URL) is required"
+        )
+
+
 def gemini_client(
-    settings: Settings, transport: httpx2.BaseTransport | None = None
+    endpoint: LLMEndpoint, transport: httpx2.BaseTransport | None = None
 ) -> httpx2.Client:
     """Client for Gemini's native REST API; POST models/<model>:generateContent."""
-    if not settings.planner_base_url.strip():
-        raise ValueError("AUDYSSEY_PLANNER_BASE_URL is required")
+    _require_url(endpoint)
     return httpx2.Client(
-        base_url=settings.planner_base_url,
-        headers={"x-goog-api-key": settings.planner_api_key},
+        base_url=endpoint.base_url,
+        headers={"x-goog-api-key": endpoint.api_key},
         # Same as the OpenAI SDK default.
         timeout=600,
-        transport=_MaskKey(
-            settings.planner_api_key, transport or httpx2.HTTPTransport()
-        ),
+        transport=_MaskKey(endpoint.api_key, transport or httpx2.HTTPTransport()),
     )
 
 
 def chat_client(
-    settings: Settings, transport: httpx2.BaseTransport | None = None
+    endpoint: LLMEndpoint, transport: httpx2.BaseTransport | None = None
 ) -> OpenAI:
-    """Return a traced client; callers pass settings.planner_model to create()."""
-    if not settings.planner_base_url.strip():
-        raise ValueError("AUDYSSEY_PLANNER_BASE_URL is required")
+    """Return a traced client; callers pass endpoint.model to create()."""
+    _require_url(endpoint)
     return wrap_openai(
         OpenAI(
-            base_url=settings.planner_base_url,
-            api_key=settings.planner_api_key or "unused",
+            base_url=endpoint.base_url,
+            api_key=endpoint.api_key or "unused",
             http_client=DefaultHttpxClient(
                 transport=_MaskKey(
-                    settings.planner_api_key, transport or httpx2.HTTPTransport()
+                    endpoint.api_key, transport or httpx2.HTTPTransport()
                 )
             ),
         )

@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TypeVar, cast
+from typing import Literal, TypeVar, cast
 
 from langsmith import trace
 from langsmith.run_helpers import tracing_context
@@ -15,7 +15,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from audyssey import media
 from audyssey.contracts import Model, PlanIssue, SourcePlan, Span, VisualHint
-from audyssey.settings import Settings
+from audyssey.settings import LLMEndpoint, Settings
 from audyssey.tools.planning import llm
 
 
@@ -23,8 +23,9 @@ class _Sources(Model):
     sources: list[object]
 
 
-class _Issues(Model):
-    issues: list[PlanIssue]
+class _Check(Model):
+    present: bool
+    reason: str = ""
 
 
 class _Span(Model):
@@ -46,51 +47,80 @@ class _InvalidJSON(RuntimeError):
 
 
 _RETRY = "Return valid JSON matching the schema."
-# Gemini caps an inline request at 20 MB; the 512 px clip of a 30 s video is far below.
+# Gemini caps an inline request at 20 MB; 512 px clips of a 30 s video are far below.
 _MAX_INLINE_B64 = 19_000_000
 
+# Provider-neutral request media: labels, base64 JPEG frames, base64 mp4 clips.
+_Part = tuple[Literal["text", "image", "video"], str]
 _Usage = dict[str, int]
 _Send = Callable[[bool], tuple[str | None, _Usage]]
 
 
-def _clip(video: Path, settings: Settings, tmp: Path) -> str:
-    clip = media.planner_clip(video, tmp / "planner.mp4", settings.planner_video_audio)
-    data = base64.b64encode(clip.read_bytes()).decode("ascii")
-    if len(data) > _MAX_INLINE_B64:
+def _b64(path: Path) -> str:
+    return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _media(
+    video: Path, endpoint: LLMEndpoint, windows: list[tuple[float, float]], tmp: Path
+) -> list[_Part]:
+    """Frames sampled at endpoint.fps, or one clip per time window."""
+    parts: list[_Part] = []
+    left = endpoint.max_frames
+    for i, (start, end) in enumerate(windows):
+        if endpoint.input == "video":
+            clip = media.planner_clip(
+                video, tmp / f"clip-{i}.mp4", endpoint.video_audio, start, end
+            )
+            parts += [
+                ("text", f"Video from {start:g} to {end:g} seconds"),
+                ("video", _b64(clip)),
+            ]
+            continue
+        if left == 0:
+            # ponytail: frames past max_frames are dropped, later windows unseen.
+            break
+        count = max(1, min(round((end - start) * endpoint.fps), left))
+        left -= count
+        for time, path in media.extract_frames(
+            video, count, tmp / f"frames-{i}", start, end
+        ):
+            parts += [("text", f"Frame at {time:g} seconds"), ("image", _b64(path))]
+    if sum(len(value) for kind, value in parts if kind == "video") > _MAX_INLINE_B64:
         # ponytail: inline only; upload through the Files API if clips outgrow 20 MB.
         raise RuntimeError("planner video is too large to send inline")
-    return data
+    return parts
 
 
-def _chat(video: Path, settings: Settings, system: str, text: str, tmp: Path) -> _Send:
+def _chat(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> _Send:
     content: list[ChatCompletionContentPartParam] = [{"type": "text", "text": text}]
-    extra: dict[str, object] = {}
-    if settings.planner_input == "video":
-        # vLLM's video_url part; not in the OpenAI SDK types.
-        url = "data:video/mp4;base64," + _clip(video, settings, tmp)
-        content.append(
-            cast(
-                ChatCompletionContentPartParam,
-                {"type": "video_url", "video_url": {"url": url}},
-            )
-        )
-        # num_frames=-1 lifts vLLM's 32-frame default so fps decides; needs
-        # --trust-request-mm-kwargs on the server.
-        extra["media_io_kwargs"] = {
-            "video": {"fps": settings.planner_fps, "num_frames": -1}
-        }
-        if settings.planner_video_audio:
-            extra["mm_processor_kwargs"] = {"use_audio_in_video": True}
-    else:
-        for time, path in media.extract_frames(video, settings.planner_frames, tmp):
-            content.append({"type": "text", "text": f"Frame at {time:g} seconds"})
-            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    for kind, value in parts:
+        if kind == "text":
+            content.append({"type": "text", "text": value})
+        elif kind == "image":
             content.append(
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+                    "image_url": {"url": f"data:image/jpeg;base64,{value}"},
                 }
             )
+        else:
+            # vLLM's video_url part; not in the OpenAI SDK types.
+            content.append(
+                cast(
+                    ChatCompletionContentPartParam,
+                    {
+                        "type": "video_url",
+                        "video_url": {"url": f"data:video/mp4;base64,{value}"},
+                    },
+                )
+            )
+    extra: dict[str, object] = {}
+    if any(kind == "video" for kind, _ in parts):
+        # num_frames=-1 lifts vLLM's 32-frame default so fps decides; needs
+        # --trust-request-mm-kwargs on the server.
+        extra["media_io_kwargs"] = {"video": {"fps": endpoint.fps, "num_frames": -1}}
+        if endpoint.video_audio:
+            extra["mm_processor_kwargs"] = {"use_audio_in_video": True}
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": system},
         {"role": "user", "content": content},
@@ -99,9 +129,9 @@ def _chat(video: Path, settings: Settings, system: str, text: str, tmp: Path) ->
     def send(retry: bool) -> tuple[str | None, _Usage]:
         if retry:
             messages.append({"role": "user", "content": _RETRY})
-        with llm.chat_client(settings) as client:
+        with llm.chat_client(endpoint) as client:
             response = client.chat.completions.create(
-                model=settings.planner_model,
+                model=endpoint.model,
                 messages=messages,
                 response_format={"type": "json_object"},
                 extra_body=extra or None,
@@ -121,31 +151,33 @@ def _chat(video: Path, settings: Settings, system: str, text: str, tmp: Path) ->
     return send
 
 
-def _gemini(
-    video: Path, settings: Settings, system: str, text: str, tmp: Path
-) -> _Send:
-    parts: list[dict[str, object]] = [
-        {
-            "inline_data": {
-                "mime_type": "video/mp4",
-                "data": _clip(video, settings, tmp),
-            },
-            "video_metadata": {"fps": settings.planner_fps},
-        },
-        {"text": text},
-    ]
+def _gemini(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> _Send:
+    contents: list[dict[str, object]] = []
+    for kind, value in parts:
+        if kind == "text":
+            contents.append({"text": value})
+        elif kind == "image":
+            contents.append({"inline_data": {"mime_type": "image/jpeg", "data": value}})
+        else:
+            contents.append(
+                {
+                    "inline_data": {"mime_type": "video/mp4", "data": value},
+                    "video_metadata": {"fps": endpoint.fps},
+                }
+            )
+    contents.append({"text": text})
     body = {
         "system_instruction": {"parts": [{"text": system}]},
-        "contents": [{"role": "user", "parts": parts}],
+        "contents": [{"role": "user", "parts": contents}],
         "generationConfig": {"responseMimeType": "application/json"},
     }
 
     def send(retry: bool) -> tuple[str | None, _Usage]:
         if retry:
-            parts.append({"text": _RETRY})
-        with llm.gemini_client(settings) as client:
+            contents.append({"text": _RETRY})
+        with llm.gemini_client(endpoint) as client:
             response = client.post(
-                f"models/{settings.planner_model}:generateContent", json=body
+                f"models/{endpoint.model}:generateContent", json=body
             )
             if not response.is_success:
                 raise RuntimeError(
@@ -166,52 +198,52 @@ def _gemini(
 
 
 def _request(
-    video: Path,
-    settings: Settings,
+    endpoint: LLMEndpoint,
     system: str,
     text: str,
+    parts: list[_Part],
     response_type: type[_Response],
 ) -> _Response:
+    backend = _gemini if endpoint.api == "gemini" else _chat
+    send = backend(endpoint, system, text, parts)
     raw = None
-    with TemporaryDirectory() as tmp:
-        backend = _gemini if settings.planner_api == "gemini" else _chat
-        send = backend(video, settings, system, text, Path(tmp))
-        for attempt in range(2):
-            # Record model/usage only: the SDK wrapper would also trace media bytes.
-            with trace(
-                "planner_completion",
-                run_type="llm",
-                inputs={"model": settings.planner_model},
-                metadata={
-                    "ls_model_name": settings.planner_model,
-                    "ls_model_type": "chat",
-                },
-            ) as run:
-                with tracing_context(enabled=False, parent=False):
-                    raw, usage = send(attempt > 0)
-                run.end(outputs={"usage_metadata": usage} if usage else {})
-            try:
-                data = json.loads(raw or "")
-                if isinstance(data, list):
-                    # Gemini sometimes drops the {"sources": [...]} wrapper.
-                    (field,) = response_type.model_fields
-                    data = {field: data}
-                return response_type.model_validate(data)
-            except (json.JSONDecodeError, ValidationError):
-                continue
+    for attempt in range(2):
+        # Record model/usage only: the SDK wrapper would also trace media bytes.
+        with trace(
+            "planner_completion",
+            run_type="llm",
+            inputs={"model": endpoint.model},
+            metadata={"ls_model_name": endpoint.model, "ls_model_type": "chat"},
+        ) as run:
+            with tracing_context(enabled=False, parent=False):
+                raw, usage = send(attempt > 0)
+            run.end(outputs={"usage_metadata": usage} if usage else {})
+        try:
+            data = json.loads(raw or "")
+            if isinstance(data, list) and len(response_type.model_fields) == 1:
+                # Gemini sometimes drops the {"sources": [...]} wrapper.
+                (field,) = response_type.model_fields
+                data = {field: data}
+            return response_type.model_validate(data)
+        except (json.JSONDecodeError, ValidationError):
+            continue
     excerpt = raw or ""
-    if settings.planner_api_key:
-        excerpt = excerpt.replace(settings.planner_api_key, "***")
+    if endpoint.api_key:
+        excerpt = excerpt.replace(endpoint.api_key, "***")
     raise _InvalidJSON(f"planner returned invalid JSON: {excerpt[:500]}") from None
 
 
-def _evidence(settings: Settings) -> str:
-    if settings.planner_input == "frames":
+def _hears(endpoint: LLMEndpoint) -> bool:
+    return endpoint.input == "video" and endpoint.video_audio
+
+
+def _evidence(endpoint: LLMEndpoint) -> str:
+    if endpoint.input == "frames":
         return (
             "Only frames are available, no audio; "
             "infer likely sources without claiming to hear them. "
         )
-    if settings.planner_video_audio:
+    if _hears(endpoint):
         return (
             "The video includes its audio track; list sounds you hear and "
             "visible things likely to make sound. "
@@ -252,21 +284,22 @@ def _source(item: object, duration: float) -> SourcePlan:
 def plan(
     video: Path, audio: Path, duration: float, feedback: list[PlanIssue]
 ) -> list[SourcePlan]:
-    settings = Settings()
+    endpoint = Settings().planner_endpoint()
+    with TemporaryDirectory() as tmp:
+        parts = _media(video, endpoint, [(0.0, duration)], Path(tmp))
     response = _request(
-        video,
-        settings,
+        endpoint,
         "You are an audio source planner. A source is one sound-producing entity. "
         "Do not split the same entity; use multiple spans for repeated sounds. "
         "Kinds: dialogue, sfx, music, ambience. "
-        + _evidence(settings)
-        + "Spans and hint times "
-        "are seconds; boxes are [x0,y0,x1,y1] normalized to 0..1. "
-        "Offscreen sources have visual_hint=null. Return JSON with a sources list. "
-        "Each source follows this schema: "
+        + _evidence(endpoint)
+        + "Spans and hint times are seconds; boxes are [x0,y0,x1,y1] normalized "
+        "to 0..1. Offscreen sources have visual_hint=null. Return JSON with a "
+        "sources list. Each source follows this schema: "
         + json.dumps(SourcePlan.model_json_schema()),
         f"Video duration: {duration:g} seconds. Feedback: "
         + json.dumps([issue.model_dump() for issue in feedback]),
+        parts,
         _Sources,
     )
     sources = []
@@ -281,19 +314,50 @@ def plan(
 
 
 def validate_plan(video: Path, audio: Path, plans: list[SourcePlan]) -> list[PlanIssue]:
-    settings = Settings()
-    seen = "frames" if settings.planner_input == "frames" else "video"
-    system = (
-        f"Check the source list against the {seen}. Report only suspicious sources; "
-        "do not report unsupported guesses about unheard audio. "
-        "Return JSON with an issues list (empty when none). Each issue follows: "
-        + json.dumps(PlanIssue.model_json_schema())
+    """Ask the validator model, per source, whether it appears in its own spans."""
+    endpoint = Settings().validator_endpoint()
+    hears = _hears(endpoint)
+    sense = (
+        "seen or heard"
+        if hears
+        else "visible (the thing making the sound or the action causing it)"
     )
-    text = "Sources: " + json.dumps([source.model_dump() for source in plans])
-    try:
-        return _request(video, settings, system, text, _Issues).issues
-    except _InvalidJSON:
-        logging.getLogger(__name__).warning(
-            "plan validator returned invalid JSON twice; proceeding without issues"
+    shown = "video clips" if endpoint.input == "video" else "video frames"
+    system = (
+        f"You verify one planned sound source against {shown} from its time "
+        f"ranges. Decide whether the source is {sense} there. Return JSON "
+        '{"present": true or false, "reason": "one short sentence"}.'
+    )
+    duration, _ = media.probe(video)
+    issues = []
+    for source in plans:
+        if not hears and source.kind in ("music", "ambience"):
+            # Usually nothing visible makes these; without audio there is no evidence.
+            continue
+        windows = [(s.start, s.end) for s in source.spans] or [(0.0, duration)]
+        with TemporaryDirectory() as tmp:
+            parts = _media(video, endpoint, windows, Path(tmp))
+        text = (
+            "Source: "
+            + json.dumps(source.model_dump(include={"name", "kind", "description"}))
+            + ". Time ranges in seconds: "
+            + ", ".join(f"{start:g}-{end:g}" for start, end in windows)
         )
-        return []
+        try:
+            check = _request(endpoint, system, text, parts, _Check)
+        except _InvalidJSON:
+            logging.getLogger(__name__).warning(
+                "plan validator returned invalid JSON twice for %s; treating as present",
+                source.name,
+            )
+            continue
+        if not check.present:
+            issues.append(
+                PlanIssue(
+                    source_name=source.name,
+                    kind="not_found",
+                    message=f"{source.name}: "
+                    + (check.reason or "not found in its time ranges"),
+                )
+            )
+    return issues
