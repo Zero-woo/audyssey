@@ -29,6 +29,23 @@ class _MaskKey(httpx2.BaseTransport):
         self.inner.close()
 
 
+def gemini_client(
+    settings: Settings, transport: httpx2.BaseTransport | None = None
+) -> httpx2.Client:
+    """Client for Gemini's native REST API; POST models/<model>:generateContent."""
+    if not settings.planner_base_url.strip():
+        raise ValueError("AUDYSSEY_PLANNER_BASE_URL is required")
+    return httpx2.Client(
+        base_url=settings.planner_base_url,
+        headers={"x-goog-api-key": settings.planner_api_key},
+        # Same as the OpenAI SDK default.
+        timeout=600,
+        transport=_MaskKey(
+            settings.planner_api_key, transport or httpx2.HTTPTransport()
+        ),
+    )
+
+
 def chat_client(
     settings: Settings, transport: httpx2.BaseTransport | None = None
 ) -> OpenAI:

@@ -140,6 +140,44 @@ def extract_frames(video: Path, count: int, out_dir: Path) -> list[tuple[float, 
     return frames
 
 
+def planner_clip(video: Path, out: Path, audio: bool) -> Path:
+    """Re-encode small enough to send inline: 512 px wide like the frames, mono audio or none."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    audio_args = ["-ac", "1", "-c:a", "aac", "-b:a", "48k"] if audio else ["-an"]
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(video),
+                "-vf",
+                "scale='min(512,iw)':-2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "28",
+                "-pix_fmt",
+                "yuv420p",
+                *audio_args,
+                str(out),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, OSError) as exc:
+        message = (
+            exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+        )
+        raise MediaError(message) from exc
+    return out
+
+
 def is_silent(wav: Path, threshold_db: float = -60.0) -> bool:
     return bool(np.max(np.abs(read_wav(wav)), initial=0) < 10 ** (threshold_db / 20))
 

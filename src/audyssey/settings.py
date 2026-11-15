@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     planner_frames: int = Field(default=4, ge=1, le=16)
     planner_model: str = ""
     planner_api_key: str = Field(default="", repr=False)
+    # openai: Chat Completions (OpenAI, vLLM, Gemini's OpenAI endpoint).
+    # gemini: native generateContent, the only Gemini path that accepts video.
+    planner_api: Literal["openai", "gemini"] = "openai"
+    # frames: planner_frames JPEGs. video: one downscaled clip sampled at planner_fps
+    # (vLLM video_url or Gemini inline video; OpenAI's API takes frames only).
+    planner_input: Literal["frames", "video"] = "frames"
+    planner_fps: float = Field(default=1, gt=0, le=30)
+    # Video input only: keep the clip's audio (Gemini, or vLLM Omni use_audio_in_video).
+    planner_video_audio: bool = False
     max_plan_rounds: int = Field(default=2, ge=1)
     max_separation_retries: int = Field(default=2, ge=0)
     max_duration_s: float = Field(default=30, gt=0)
@@ -60,3 +69,11 @@ class Settings(BaseSettings):
     sam_audio_clap_checkpoint: str = ""
     sam_audio_imagebind_checkpoint: str = ""
     judge_pass_threshold: float = 0.5
+
+    @model_validator(mode="after")
+    def _gemini_takes_video(self) -> Self:
+        if self.planner_api == "gemini" and self.planner_input != "video":
+            raise ValueError(
+                "AUDYSSEY_PLANNER_API=gemini requires AUDYSSEY_PLANNER_INPUT=video"
+            )
+        return self

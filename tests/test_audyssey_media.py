@@ -83,6 +83,27 @@ class MediaTests(unittest.TestCase):
                 ]))
                 self.assertEqual(info["streams"][0]["width"], 160)
 
+    def test_planner_clip_downscales_and_controls_audio(self):
+        from audyssey.media import planner_clip, probe
+
+        wide = self.root / "wide-audio.mp4"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-i", str(self.video),
+            "-vf", "scale=1024:768", str(wide),
+        ], check=True, capture_output=True)
+        self.assertGreater(probe(wide)[1], 0)
+        for audio in (True, False):
+            with self.subTest(audio=audio):
+                clip = planner_clip(wide, self.root / f"clip-{audio}.mp4", audio)
+                width = subprocess.check_output([
+                    "ffprobe", "-v", "error", "-show_entries", "stream=width",
+                    "-select_streams", "v:0", "-of", "csv=p=0", str(clip),
+                ], text=True)
+                self.assertEqual(int(width), 512)
+                duration, channels = probe(clip)
+                self.assertAlmostEqual(duration, probe(wide)[0], delta=0.2)
+                self.assertEqual(channels, 1 if audio else 0)
+
     def test_extract_frames_downscales_and_handles_short_video(self):
         from audyssey.media import extract_frames
 

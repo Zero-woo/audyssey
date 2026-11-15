@@ -95,7 +95,7 @@ docker compose logs -f vllm   # "Application startup complete"가 뜨면 준비 
 Gemini 플래너를 쓰면 vLLM 없이 띄웁니다.
 ```bash
 AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ \
-AUDYSSEY_PLANNER_MODEL=gemini-2.5-flash \
+AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite \
 docker compose up -d main separation judge grounding generation
 ```
 
@@ -150,7 +150,7 @@ Pod에서는 tools 이미지 하나가 도구 4개(분리·Judge·그라운딩·
    AUDYSSEY_GROUNDING_URL=https://<POD-ID>-8700.proxy.runpod.net
    AUDYSSEY_GENERATOR_URL=https://<POD-ID>-8700.proxy.runpod.net
    AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-   AUDYSSEY_PLANNER_MODEL=gemini-2.5-flash
+   AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite
    GOOGLE_API_KEY=<키>
    ```
 4. 노트북에서 main만 띄웁니다(노트북에는 GPU가 필요 없음).
@@ -242,14 +242,20 @@ AUDYSSEY_GENERATOR=remote AUDYSSEY_GENERATOR_URL=http://127.0.0.1:8701 uv run au
 
 ## 플래너 연결 (Gemini, vLLM)
 
-플래너 real(`planning/real.py`)은 영상에서 고르게 뽑은 JPEG 프레임(기본 4장)과 피드백을 OpenAI 호환 API로 보냅니다.
-오디오는 아직 보내지 않습니다.
+플래너 real(`planning/real.py`)과 검증기는 같은 설정으로 같은 모델을 부릅니다. 입력은 두 가지입니다.
+
+- `frames`(기본): 영상 전체에서 고르게 뽑은 JPEG `AUDYSSEY_PLANNER_FRAMES`장(기본 4)을 보냅니다. 이미지마다 앞에 `Frame at <초> seconds` 텍스트를 붙여 순서와 시각을 알립니다. 오디오는 보내지 않습니다.
+- `video`: 영상을 가로 512px로 다시 인코딩해 한 개의 영상으로 보내고, 모델이 `AUDYSSEY_PLANNER_FPS`로 샘플링합니다. `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`면 오디오 트랙도 함께 보냅니다.
+
+공급자별 지원 모델, 입력 구조, 비용은 [플래너 모델 조사](planner-models.md)에 있습니다.
 
 | 대상 | 설정 |
 |---|---|
-| Gemini | `AUDYSSEY_PLANNER=real`, `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `AUDYSSEY_PLANNER_MODEL=gemini-2.5-flash`, 키는 `AUDYSSEY_PLANNER_API_KEY` (Compose에서는 `GOOGLE_API_KEY`를 넣으면 대신 전달) |
-| 직접 띄운 vLLM | `AUDYSSEY_PLANNER_BASE_URL=http://<vllm>:8000/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`. 인증 없는 서버면 키 생략 |
-| Compose 안의 vLLM | 기본값. `vllm/vllm-openai:v0.32.0` + `Qwen/Qwen2.5-VL-3B-Instruct` (캐시 필요) |
+| Gemini 영상 (네이티브 API) | `AUDYSSEY_PLANNER_API=gemini`, `AUDYSSEY_PLANNER_INPUT=video`, `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`, `AUDYSSEY_PLANNER_FPS=1`, `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`. 키는 `AUDYSSEY_PLANNER_API_KEY` (Compose에서는 `GOOGLE_API_KEY`를 넣으면 대신 전달) |
+| Gemini 프레임 (OpenAI 호환) | `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`. 이 엔드포인트는 영상을 받지 않습니다 |
+| OpenAI | `AUDYSSEY_PLANNER_BASE_URL=https://api.openai.com/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`, 키는 `AUDYSSEY_PLANNER_API_KEY`. OpenAI API는 영상을 받지 않으므로 `frames`만 씁니다 |
+| 직접 띄운 vLLM | `AUDYSSEY_PLANNER_BASE_URL=http://<vllm>:8000/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`. 인증 없는 서버면 키 생략. `video` 입력은 서버를 `--trust-request-mm-kwargs`로 띄워야 fps가 적용됩니다 |
+| Compose 안의 vLLM | 기본값. `vllm/vllm-openai:v0.32.0` + `Qwen/Qwen2.5-VL-3B-Instruct` (캐시 필요). `video` 입력 가능. 오디오(`AUDYSSEY_PLANNER_VIDEO_AUDIO=true`)는 Qwen-Omni 모델만 |
 
 Python으로 직접 띄울 때(`uv run audyssey serve`)는 `.env`를 읽지 않습니다. 환경변수로 넘기거나 `uv run --env-file .env ...`를 씁니다.
 
@@ -280,7 +286,7 @@ PYTHON
 
 # Gemini
 AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ \
-AUDYSSEY_PLANNER_MODEL=gemini-2.5-flash \
+AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite \
 uv run --env-file .env python /tmp/audyssey-planner-live.py
 
 # Compose 안의 vLLM
@@ -351,7 +357,11 @@ LANGSMITH_PROJECT=audyssey
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `AUDYSSEY_PLANNER_BASE_URL` / `AUDYSSEY_PLANNER_MODEL` / `AUDYSSEY_PLANNER_API_KEY` | 빈 값 | OpenAI 호환 플래너 주소, 모델, 키 |
-| `AUDYSSEY_PLANNER_FRAMES` | `4` | 플래너와 검증기에 보내는 프레임 수 (1~16) |
+| `AUDYSSEY_PLANNER_API` | `openai` | `openai`(Chat Completions: OpenAI, vLLM, Gemini OpenAI 호환) 또는 `gemini`(네이티브 API, `video` 입력만) |
+| `AUDYSSEY_PLANNER_INPUT` | `frames` | `frames`(이미지 여러 장) 또는 `video`(영상 하나) |
+| `AUDYSSEY_PLANNER_FRAMES` | `4` | `frames` 입력에서 보내는 프레임 수 (1~16) |
+| `AUDYSSEY_PLANNER_FPS` | `1` | `video` 입력에서 모델이 샘플링하는 fps (0 초과~30) |
+| `AUDYSSEY_PLANNER_VIDEO_AUDIO` | `false` | `video` 입력에 오디오 트랙 포함 (Gemini, vLLM Qwen-Omni) |
 
 **흐름과 작업**
 
