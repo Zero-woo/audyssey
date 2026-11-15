@@ -603,22 +603,31 @@ function rowActions(t) {
   const list = [];
   if (s.origin === "separated") list.push(["redo", "다시 분리", { type: "reseparate", source_id: s.id }]);
   if (s.origin === "generated") list.push(["redo", "다시 생성", { type: "generate", source_id: s.id }]);
-  if (s.origin === "separated" && s.plan.kind !== "dialogue" && !S.job.sources.some((o) => o.replaces === s.id)) list.push(["spark", "생성으로 바꾸기", { type: "generate", source_id: s.id }]);
+  if (s.origin === "separated" && s.plan.kind !== "dialogue") {
+    // The server regenerates the existing replacement when there is one.
+    const replaced = S.job.sources.some((o) => o.replaces === s.id);
+    list.push(["spark", replaced ? "다시 생성" : "생성으로 바꾸기", { type: "generate", source_id: s.id }]);
+  }
   return list.map(([ic, label, cmd]) => ({ ic, label, run: () => send(cmd, t.id, true) }));
 }
 
 let menuEl = null;
 function openMenu(anchor, actions) {
+  const reopen = menuEl?.anchor === anchor;
   closeMenu();
+  if (reopen) return;
   const r = anchor.getBoundingClientRect();
   menuEl = el("div", { class: "menu", role: "menu" }, actions.map((a) => el("button", { role: "menuitem", onclick: () => { closeMenu(); a.run(); } }, icon(a.ic), a.label)));
   document.body.append(menuEl);
   const w = menuEl.offsetWidth, h = menuEl.offsetHeight;
   menuEl.style.left = `${Math.min(window.innerWidth - w - 8, r.right - w)}px`;
   menuEl.style.top = `${r.bottom + h + 8 > window.innerHeight ? r.top - h - 4 : r.bottom + 4}px`;
+  menuEl.anchor = anchor;
   menuEl.querySelector("button").focus();
-  setTimeout(() => document.addEventListener("click", closeMenu, { once: true }), 0);
 }
+document.addEventListener("click", (e) => {
+  if (menuEl && !menuEl.contains(e.target) && !menuEl.anchor.contains(e.target)) closeMenu();
+});
 function closeMenu() { menuEl?.remove(); menuEl = null; }
 
 function seekFromWave(e) {
