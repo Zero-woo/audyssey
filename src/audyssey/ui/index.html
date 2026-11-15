@@ -106,7 +106,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .edge.active { opacity: .45; }
 .pulse { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 0.1 11; pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) { .pulse { animation: flow .6s linear infinite; } }
-.edge.video, .pulse.video { stroke: var(--video); } .edge.video { stroke-dasharray: 1 4.5; } .edge.audio, .pulse.audio { stroke: var(--audio); } .edge.text, .pulse.text { stroke: var(--text); } .edge.text { stroke-dasharray: 6 4; }
+.edge.video, .pulse.video { stroke: var(--video); } .edge.audio, .pulse.audio { stroke: var(--audio); } .edge.text, .pulse.text { stroke: var(--text); }
 .tip.video { fill: var(--video); } .tip.audio { fill: var(--audio); } .tip.text { fill: var(--text); }
 @keyframes flow { to { stroke-dashoffset: -11.1; } }
 .node { cursor: pointer; outline: none; }
@@ -131,8 +131,11 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .badge path { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .legend { display: inline-flex; gap: 12px; color: var(--muted); font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.legend .key { width: 22px; height: 8px; overflow: visible; }
-.legend .edge { opacity: 1; }
+.hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; outline: none; }
+.hit:focus-visible { stroke: var(--accent); stroke-opacity: .22; }
+.link.selected .edge { stroke-width: 3; opacity: 1; }
+@media (hover: hover) { .link:hover .edge { stroke-width: 3; opacity: 1; } }
+.flow .elabel { pointer-events: none; font-size: 12px; font-weight: 600; fill: var(--muted); paint-order: stroke; stroke: var(--sunken); stroke-width: 4px; stroke-linejoin: round; }
 .lane .band { fill: var(--sunken); }
 .lane.busy .band { fill: var(--accent-soft); }
 .lane .lname { font-size: 13.5px; font-weight: 600; fill: var(--ink); }
@@ -324,10 +327,6 @@ details.sub > summary::-webkit-details-marker { display: none; }
   <section class="panel pipeline" aria-label="파이프라인">
     <div class="panel-head">
       <h2>파이프라인</h2>
-      <span class="legend" aria-hidden="true">
-        <span><svg class="key"><line class="edge done video" x1="1" y1="4" x2="21" y2="4"/></svg>영상</span>
-        <span><svg class="key"><line class="edge done audio" x1="1" y1="4" x2="21" y2="4"/></svg>오디오</span>
-        <span><svg class="key"><line class="edge done text" x1="1" y1="4" x2="21" y2="4"/></svg>텍스트</span>
       </span>
       <span class="meta" id="servers-meta"></span>
     </div>
@@ -801,12 +800,27 @@ const LANES = [
   { id: "generation", name: "Tool server (generation:8700)", models: [], steps: ["generate", "score"], up: null },
 ];
 const LINKS = [
-  ["preprocess", "plan", "video"], ["plan", "validate_plan", "text"], ["validate_plan", "plan", "text", "loop"],
-  ["validate_plan", "separate", "text"], ["separate", "judge", "audio"], ["judge", "separate", "text", "loop"],
+  ["preprocess", "plan", "video", null, "영상"], ["plan", "validate_plan", "text", null, "텍스트"], ["validate_plan", "plan", "text", "loop"],
+  ["validate_plan", "separate", "text"], ["separate", "judge", "audio", null, "오디오"], ["judge", "separate", "text", "loop"],
   ["judge", "residual", "audio"], ["residual", "render", "audio"],
-  ["validate_plan", "generate", "text"], ["generate", "score", "audio"], ["score", "generate", "text", "loop"],
+  ["validate_plan", "generate", "text"], ["generate", "score", "audio", null, "오디오"], ["score", "generate", "text", "loop"],
   ["score", "render", "audio"],
 ];
+const DATA = { video: "영상", audio: "오디오", text: "텍스트" };
+const CARRIES = {
+  "preprocess>plan": { step: "plan", keys: ["video", "audio", "duration"] },
+  "plan>validate_plan": { step: "validate_plan", keys: ["plans"] },
+  "validate_plan>plan": { step: "plan", keys: ["feedback"] },
+  "validate_plan>separate": { step: "separate", keys: ["plan"] },
+  "validate_plan>generate": { step: "generate", keys: ["plan"] },
+  "separate>judge": { step: "judge", keys: ["track"] },
+  "judge>separate": { step: "judge", output: true },
+  "judge>residual": { step: "residual", keys: ["tracks"] },
+  "residual>render": { step: "residual", output: true },
+  "generate>score": { step: "score", keys: ["track"] },
+  "score>generate": { step: "score", output: true },
+  "score>render": { step: "render", keys: ["sources"] },
+};
 const GLYPH = { done: "M-3 0l2 2 4-4", warning: "M0 -3.5v3.5M0 3h0", failed: "M-2.5 -2.5l5 5M2.5 -2.5l-5 5" };
 // Short enough for a step box; the lane label keeps the exact IDs.
 const PRETTY = { "gemini-3.8-flash": "Gemini Flash", "Qwen3-VL-8B-Instruct": "Qwen3-VL 8B", "sam-audio-large-tv": "SAM Audio", "sam-audio-judge": "SAM Judge", "internal-model": "Internal" };
@@ -865,7 +879,8 @@ function drawBoard() {
     if (b.y > a.y) return `M ${acx} ${a.y + nodeH} L ${acx} ${bcy - r} Q ${acx} ${bcy}, ${acx + r} ${bcy} L ${b.x - gap} ${bcy}`;
     return `M ${a.x + nodeW} ${acy} L ${bcx - r} ${acy} Q ${bcx} ${acy}, ${bcx} ${acy - r} L ${bcx} ${b.y + nodeH + gap}`;
   };
-  for (const [from, to, kind, loop] of LINKS) {
+  const written = new Set();
+  for (const [from, to, kind, loop, label] of LINKS) {
     if (idle(from) || idle(to)) continue;
     const sTo = st[to].status, sFrom = st[from].status;
     let state = "";
@@ -876,14 +891,25 @@ function drawBoard() {
     } else if (sTo === "running" && sFrom !== "pending") state = "active";
     else if (sFrom !== "pending" && sTo !== "pending") state = "done";
     const d = route(from, to, loop);
-    svg.append(make("path", { class: `edge ${kind} ${state}`, d, "marker-end": `url(#tip-${kind})` }));
+    const key = `edge:${from}>${to}`;
+    const link = make("g", { class: `link${S.selected === key ? " selected" : ""}` });
+    link.append(make("path", { class: `edge ${kind} ${state}`, d, "marker-end": `url(#tip-${kind})` }));
     // Pulses travel along the edge feeding the running step.
-    if (state === "active") svg.append(make("path", { class: `pulse ${kind}`, d }));
+    if (state === "active") link.append(make("path", { class: `pulse ${kind}`, d }));
+    // A wide transparent stroke makes the thin line easy to click.
+    link.append(make("path", { class: "hit", d, tabindex: 0, role: "button", "data-key": key, "aria-label": `${STEPS[from].label}에서 ${STEPS[to].label}로 보낸 ${DATA[kind]} 보기` }));
+    svg.append(link);
+    // Name the data where its type changes, above the segment entering the next step.
+    if (label && !written.has(label)) {
+      written.add(label);
+      const a = pos(from), b = pos(to), x = a.y === b.y ? (a.x + nodeW + b.x) / 2 : (a.x + nodeW / 2 + b.x) / 2;
+      svg.append(make("text", { class: "elabel", x, y: b.y + nodeH / 2 - 7, "text-anchor": "middle" }, label));
+    }
   }
 
   for (const step of Object.keys(COL)) {
     const p = pos(step), info = st[step], count = nodeSub(step, info);
-    const g = make("g", { class: `node ${info.status}${idle(step) ? " idle" : ""}${S.selected === step ? " selected" : ""}`, tabindex: 0, role: "button", "data-step": step, "aria-label": `${STEPS[step].label}, ${nodeModel(step)}, ${STATUS[info.status]}${count ? `, ${count}` : ""}` });
+    const g = make("g", { class: `node ${info.status}${idle(step) ? " idle" : ""}${S.selected === step ? " selected" : ""}`, tabindex: 0, role: "button", "data-key": step, "aria-label": `${STEPS[step].label}, ${nodeModel(step)}, ${STATUS[info.status]}${count ? `, ${count}` : ""}` });
     g.append(make("rect", { class: "box", x: p.x, y: p.y, width: nodeW, height: nodeH, rx: 10 }));
     g.append(make("text", { class: "label", x: p.x + 11, y: p.y + 19 }, STEPS[step].label));
     g.append(make("text", { class: "model", x: p.x + 11, y: p.y + 35 }, shorten(nodeModel(step), 13)));
@@ -900,8 +926,8 @@ function drawBoard() {
   $("servers-meta").textContent = S.lanes.length ? `서버 ${known.filter((l) => l.up).length}/${known.length} 응답` : "";
 }
 const shorten = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
-$("board").addEventListener("click", (e) => { const g = e.target.closest(".node"); if (g) openDrawer(g.dataset.step); });
-$("board").addEventListener("keydown", (e) => { const g = e.target.closest(".node"); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(g.dataset.step); } });
+$("board").addEventListener("click", (e) => { const g = e.target.closest("[data-key]"); if (g) openDrawer(g.dataset.key); });
+$("board").addEventListener("keydown", (e) => { const g = e.target.closest("[data-key]"); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(g.dataset.key); } });
 
 /* ---------- inspector drawer ---------- */
 let lastFocus = null;
@@ -924,7 +950,7 @@ function closeDrawer() {
   setTimeout(() => { if (!S.selected) { d.hidden = true; s.hidden = true; } }, 260);
   drawBoard();
   // The board redraws its nodes, so find the step again rather than the stale element.
-  (lastFocus?.isConnected ? lastFocus : document.querySelector(`.node[data-step="${step}"]`))?.focus();
+  (lastFocus?.isConnected ? lastFocus : document.querySelector(`[data-key="${step}"]`))?.focus();
 }
 $("drawer-close").addEventListener("click", closeDrawer);
 $("scrim").addEventListener("click", closeDrawer);
@@ -932,6 +958,7 @@ $("scrim").addEventListener("click", closeDrawer);
 function drawDrawer() {
   const step = S.selected;
   if (!step) return;
+  if (step.startsWith("edge:")) return drawEdge(step);
   const lane = S.lanes.find((l) => l.steps.includes(step));
   $("drawer-title").textContent = STEPS[step].label;
   $("drawer-where").textContent = lane ? [laneName(lane.name), ...lane.models].join("  /  ") : "";
@@ -941,8 +968,30 @@ function drawDrawer() {
     body.replaceChildren(el("p", { class: "none" }, nodeState(step).status === "running" ? "진행 중" : "기록 없음"));
     return;
   }
-  const open = new Set([...body.querySelectorAll("details.call[open]")].map((d) => d.dataset.id));
+  const open = body.dataset.key === S.selected ? new Set([...body.querySelectorAll("details.call[open]")].map((d) => d.dataset.id)) : new Set();
+  body.dataset.key = S.selected;
   body.replaceChildren(...calls.map((c, i) => renderCall(c, open.size ? open.has(c.id) : i === 0)));
+}
+// Korean subject particle: 이 after a final consonant, 가 otherwise.
+const subject = (w) => w + ((w.charCodeAt(w.length - 1) - 0xAC00) % 28 ? "이" : "가");
+// An edge shows only what crossed it, per call of the step that received it.
+function drawEdge(key) {
+  const [from, to] = key.slice(5).split(">");
+  const link = LINKS.find((l) => l[0] === from && l[1] === to), carry = CARRIES[`${from}>${to}`];
+  $("drawer-title").textContent = `${STEPS[from].label} → ${STEPS[to].label}`;
+  $("drawer-where").textContent = link[3] ? `${DATA[link[2]]}, 다시 하도록 돌려보낸 판정` : `${DATA[link[2]]}, ${subject(STEPS[to].label)} 받은 입력`;
+  const body = $("drawer-body");
+  const calls = S.trace.filter((c) => TOOL_STEP[c.tool] === carry.step).reverse();
+  if (!S.job || !calls.length) { body.replaceChildren(el("p", { class: "none" }, "아직 보낸 데이터 없음")); return; }
+  const open = body.dataset.key === S.selected ? new Set([...body.querySelectorAll("details.call[open]")].map((d) => d.dataset.id)) : new Set();
+  body.dataset.key = S.selected;
+  body.replaceChildren(...calls.map((c, i) => {
+    const value = carry.output ? c.output : Object.fromEntries(carry.keys.filter((k) => c.inputs?.[k] != null).map((k) => [k, c.inputs[k]]));
+    const shown = carry.output ? renderOutput(c) : carry.keys.length === 1 ? renderValue(value[carry.keys[0]]) : renderValue(value);
+    return el("details", { class: "call", open: open.size ? open.has(c.id) : i === 0, "data-id": c.id },
+      el("summary", {}, icon("chev"), callTitle(c), el("span", { class: "meta" }, sec(c.seconds))),
+      el("div", { class: "block" }, el("div", { class: "block-head" }, el("span", { class: `tag ${link[3] ? "out" : "in"}` }, link[3] ? "판정" : "전달")), shown));
+  }));
 }
 function callTitle(c) {
   const id = c.step.includes(":") ? c.step.split(":")[1] : null;
@@ -995,7 +1044,7 @@ function renderOutput(c) {
 function renderPlans(plans) {
   return el("div", { class: "plans" }, plans.map((p) => el("div", { class: "plan" },
     el("b", {}, p.name), el("span", { class: "k" }, KIND[p.kind] || p.kind), el("div", {}, p.description),
-    p.spans?.length ? el("div", { class: "spans" }, p.spans.map((s) => `${s.start.toFixed(2)}–${s.end.toFixed(2)}s`).join("  ")) : null)));
+    p.spans?.length ? el("div", { class: "spans" }, p.spans.map((s) => `${s.start.toFixed(2)}–${s.end.toFixed(2)}s`).join(", ")) : null)));
 }
 function renderValue(v) {
   if (v && typeof v === "object" && !Array.isArray(v) && typeof v.file === "string") return renderFile(v.file);
