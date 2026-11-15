@@ -317,16 +317,27 @@ def validate_plan(video: Path, audio: Path, plans: list[SourcePlan]) -> list[Pla
     """Ask the validator model, per source, whether it appears in its own spans."""
     endpoint = Settings().validator_endpoint()
     hears = _hears(endpoint)
-    sense = (
-        "seen or heard"
-        if hears
-        else "visible (the thing making the sound or the action causing it)"
-    )
+    if hears:
+        sense = "Decide whether the source is seen or heard there. "
+    else:
+        # The model cannot hear: judge by whether the named producer is shown.
+        # "Plausibly audible" alone accepted absent producers (a dog) in tests.
+        sense = (
+            "You cannot hear audio, so judge by the sound's producer. First name "
+            "what is visible in the clips. Answer true only if the specific "
+            "producer named in the source (the same kind of person, creature or "
+            "object, or the action causing it) is visible; a sound with no visual "
+            "trace, like a grunt or a voice, is true if that producer is shown. "
+            "Answer false if the producer is a different or absent thing, e.g. a "
+            "dog when only humans or monsters are shown. Put what you saw in the "
+            "reason. "
+        )
     shown = "video clips" if endpoint.input == "video" else "video frames"
     system = (
         f"You verify one planned sound source against {shown} from its time "
-        f"ranges. Decide whether the source is {sense} there. Return JSON "
-        '{"present": true or false, "reason": "one short sentence"}.'
+        "ranges. "
+        + sense
+        + 'Return JSON {"present": true or false, "reason": "one short sentence"}.'
     )
     duration, _ = media.probe(video)
     issues = []

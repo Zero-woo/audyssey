@@ -252,7 +252,7 @@ class PlannerRealTests(unittest.TestCase):
         self.assertIn('"name": "person"', text)
         self.assertIn("0.5-1, 1.5-2", text)
         self.assertIn("Frame at 0.25 seconds", text)
-        self.assertIn("visible", first["messages"][0]["content"])
+        self.assertIn("judge by the sound's producer", first["messages"][0]["content"])
         # One frame per 0.5 s span at 1 fps; no spans means the whole video.
         windows = [(call.args[1], call.args[3], call.args[4]) for call in self.frames.call_args_list]
         self.assertEqual(windows, [(1, 0.5, 1.0), (1, 1.5, 2.0), (2, 0, 2.0)])
@@ -284,6 +284,7 @@ class PlannerRealTests(unittest.TestCase):
         self.assertEqual(request["media_io_kwargs"], {"video": {"fps": 4.0, "num_frames": -1}})
         self.assertEqual(request["mm_processor_kwargs"], {"use_audio_in_video": True})
         self.assertIn("seen or heard", request["messages"][0]["content"])
+        self.assertNotIn("cannot hear", request["messages"][0]["content"])
 
     def test_validator_uses_its_own_model(self):
         env = {"AUDYSSEY_VALIDATOR_MODEL": "validator-model"}
