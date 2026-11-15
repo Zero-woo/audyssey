@@ -821,7 +821,7 @@ const LANES = [
   { id: "generation", name: "Tool server (generation:8700)", models: [], steps: ["generate", "score"], up: null },
 ];
 const LINKS = [
-  ["preprocess", "plan", "video", null, "영상"], ["plan", "validate_plan", "text", null, "텍스트"], ["validate_plan", "plan", "text", "loop"],
+  ["preprocess", "plan", "video", null, "영상"], ["preprocess", "validate_plan", "video"], ["preprocess", "generate", "video"], ["plan", "validate_plan", "text", null, "텍스트"], ["validate_plan", "plan", "text", "loop"],
   ["validate_plan", "separate", "text"], ["separate", "judge", "audio", null, "오디오"], ["judge", "separate", "text", "loop"],
   ["judge", "residual", "audio"], ["residual", "render", "audio"],
   ["validate_plan", "generate", "text"], ["generate", "score", "audio", null, "오디오"], ["score", "generate", "text", "loop"],
@@ -830,6 +830,8 @@ const LINKS = [
 const DATA = { video: "영상", audio: "오디오", text: "텍스트" };
 const CARRIES = {
   "preprocess>plan": { step: "plan", keys: ["video", "audio", "duration"] },
+  "preprocess>validate_plan": { step: "validate_plan", keys: ["video", "audio"] },
+  "preprocess>generate": { step: "generate", keys: ["video"] },
   "plan>validate_plan": { step: "validate_plan", keys: ["plans"] },
   "validate_plan>plan": { step: "plan", keys: ["feedback"] },
   "validate_plan>separate": { step: "separate", keys: ["plan"] },
@@ -891,13 +893,15 @@ function drawBoard() {
   });
 
   // Orthogonal routes: forward edges step down then right, or right then up; loops go back the other way.
+  const ENTRY = { "preprocess>validate_plan": 9, "plan>validate_plan": -9, "preprocess>generate": 9, "validate_plan>generate": -9 };
   const route = (from, to, loop) => {
     const a = pos(from), b = pos(to);
     const acx = a.x + nodeW / 2, acy = a.y + nodeH / 2, bcx = b.x + nodeW / 2, bcy = b.y + nodeH / 2;
     if (loop && a.y === b.y) return `M ${acx} ${a.y + nodeH + gap} C ${acx} ${a.y + nodeH + 16}, ${bcx} ${b.y + nodeH + 16}, ${bcx} ${b.y + nodeH + gap}`;
     if (loop) return `M ${acx} ${a.y - gap} L ${acx} ${bcy + r} Q ${acx} ${bcy}, ${acx - r} ${bcy} L ${b.x + nodeW + gap} ${bcy}`;
     if (a.y === b.y) return `M ${a.x + nodeW} ${acy} L ${b.x - gap} ${bcy}`;
-    if (b.y > a.y) return `M ${acx} ${a.y + nodeH} L ${acx} ${bcy - r} Q ${acx} ${bcy}, ${acx + r} ${bcy} L ${b.x - gap} ${bcy}`;
+    const ey = bcy + (ENTRY[`${from}>${to}`] || 0);
+    if (b.y > a.y) return `M ${acx} ${a.y + nodeH} L ${acx} ${ey - r} Q ${acx} ${ey}, ${acx + r} ${ey} L ${b.x - gap} ${ey}`;
     return `M ${a.x + nodeW} ${acy} L ${bcx - r} ${acy} Q ${bcx} ${acy}, ${bcx} ${acy - r} L ${bcx} ${b.y + nodeH + gap}`;
   };
   const written = new Set();
@@ -924,7 +928,7 @@ function drawBoard() {
     if (label && !written.has(label)) {
       written.add(label);
       const a = pos(from), b = pos(to), x = a.y === b.y ? (a.x + nodeW + b.x) / 2 : (a.x + nodeW / 2 + b.x) / 2;
-      svg.append(make("text", { class: "elabel", x, y: b.y + nodeH / 2 - 7, "text-anchor": "middle" }, label));
+      svg.append(make("text", { class: "elabel", x, y: b.y + nodeH / 2 + (ENTRY[`${from}>${to}`] || 0) - 7, "text-anchor": "middle" }, label));
     }
   }
 
