@@ -29,7 +29,6 @@ class PlannerRealTests(unittest.TestCase):
             "AUDYSSEY_PLANNER_BASE_URL": "http://test.invalid/v1",
             "AUDYSSEY_PLANNER_MODEL": "fake-model",
             "AUDYSSEY_PLANNER_API_KEY": "fake-key",
-            "AUDYSSEY_PLANNER_FRAMES": "2",
             "LANGSMITH_TRACING": "false",
         }, clear=True)
         env.start()
@@ -37,8 +36,11 @@ class PlannerRealTests(unittest.TestCase):
         frames = patch("audyssey.media.extract_frames", return_value=[
             (0.25, self.image), (1.25, self.image),
         ])
-        frames.start()
+        self.frames = frames.start()
         self.addCleanup(frames.stop)
+        probe = patch("audyssey.media.probe", return_value=(2.0, 2))
+        probe.start()
+        self.addCleanup(probe.stop)
         # The real SDK serializes the request; only the network is replaced.
         client = patch("audyssey.tools.planning.llm.chat_client", side_effect=lambda settings: chat_client(
             settings, transport=httpx2.MockTransport(self.respond)
@@ -70,13 +72,6 @@ class PlannerRealTests(unittest.TestCase):
         result = real.plan(self.video, self.audio, 2, [])
         self.assertEqual([p.name for p in result], ["person"])
         self.assertEqual(len(self.requests), 1)
-
-    def test_validate_accepts_bare_issue_list(self):
-        self.responses.append(json.dumps([
-            {"source_name": "person", "kind": "mismatch", "message": "not visible"},
-        ]))
-        issues = real.validate_plan(self.video, self.audio, [SourcePlan(**self.source())])
-        self.assertEqual([i.message for i in issues], ["not visible"])
 
     def test_plan_parses_sources_and_clamps(self):
         result = self.plan([self.source(
@@ -143,29 +138,169 @@ class PlannerRealTests(unittest.TestCase):
             self.assertNotIn(data.decode(), wire)
             self.assertNotIn(base64.b64encode(data).decode(), wire)
 
-    def test_validate_maps_issues(self):
-        plans = [SourcePlan(**self.source())]
-        issue = {"source_name": "person", "kind": "mismatch", "message": "check the person"}
-        self.responses = [json.dumps({"issues": [issue]}), json.dumps({"issues": []})]
-        self.assertEqual(real.validate_plan(self.video, self.audio, plans), [PlanIssue(**issue)])
-        self.assertEqual(real.validate_plan(self.video, self.audio, plans), [])
-        content = self.requests[0]["messages"][1]["content"]
-        text = "\n".join(p["text"] for p in content if p["type"] == "text")
-        self.assertIn(json.dumps([plans[0].model_dump()]), text)
-        self.assertIn("0.25", text)
-        self.assertEqual(len([p for p in content if p["type"] == "image_url"]), 2)
-        self.requests.clear()
-        self.responses = ["bad", json.dumps({"issues": [issue]})]
-        self.assertEqual(real.validate_plan(self.video, self.audio, plans), [PlanIssue(**issue)])
-        self.assertEqual(len(self.requests), 2)
+    def test_plan_samples_frames_by_fps_up_to_cap(self):
+        for env, count in [({"AUDYSSEY_PLANNER_FPS": "3"}, 6), ({"AUDYSSEY_PLANNER_FPS": "3", "AUDYSSEY_PLANNER_MAX_FRAMES": "4"}, 4),
+                           ({"AUDYSSEY_PLANNER_FPS": "0.1"}, 1)]:
+            with self.subTest(env=env), patch.dict(os.environ, env):
+                self.frames.reset_mock()
+                self.plan([self.source()])
+                args = self.frames.call_args.args
+                self.assertEqual((args[1], args[3], args[4]), (count, 0, 2))
 
-    def test_validate_bad_json_returns_no_issues(self):
-        for bad in ["bad", '{}', '{"issues": null}', '{"issues": [{}]}']:
+    def clip(self, windows=False):
+        self.windows = windows
+        calls = []
+
+        def write(video, out, audio, start=0, end=None):
+            calls.append((audio, start, end) if self.windows else audio)
+            out.write_bytes(b"clip-bytes")
+            return out
+
+        clip = patch("audyssey.media.planner_clip", side_effect=write)
+        clip.start()
+        self.addCleanup(clip.stop)
+        return calls
+
+    def test_video_input_sends_one_video_with_fps(self):
+        calls = self.clip()
+        encoded = base64.b64encode(b"clip-bytes").decode()
+        for audio in (False, True):
+            env = {"AUDYSSEY_PLANNER_INPUT": "video", "AUDYSSEY_PLANNER_FPS": "2",
+                   "AUDYSSEY_PLANNER_VIDEO_AUDIO": str(audio).lower()}
+            with self.subTest(audio=audio), patch.dict(os.environ, env):
+                self.requests.clear()
+                self.plan([self.source()])
+                request = self.requests[0]
+                parts = request["messages"][1]["content"]
+                self.assertEqual([p["type"] for p in parts], ["text", "text", "video_url"])
+                self.assertEqual(parts[1]["text"], "Video from 0 to 2 seconds")
+                self.assertEqual(parts[2]["video_url"]["url"], "data:video/mp4;base64," + encoded)
+                self.assertEqual(request["media_io_kwargs"], {"video": {"fps": 2.0, "num_frames": -1}})
+                self.assertEqual(request.get("mm_processor_kwargs"),
+                                 {"use_audio_in_video": True} if audio else None)
+                self.assertEqual(calls[-1], audio)
+                self.assertEqual("audio track" in request["messages"][0]["content"], audio)
+
+    def respond_gemini(self, request):
+        self.requests.append({"url": str(request.url), "key": request.headers.get("x-goog-api-key"),
+                              **json.loads(request.content)})
+        return httpx2.Response(200, json={
+            "candidates": [{"content": {"parts": [{"text": self.responses.pop(0)}]}}],
+            "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 5, "totalTokenCount": 8},
+        })
+
+    def test_gemini_api_sends_native_video_request(self):
+        from audyssey.tools.planning.llm import gemini_client
+
+        calls = self.clip()
+        client = patch("audyssey.tools.planning.llm.gemini_client", side_effect=lambda settings: gemini_client(
+            settings, transport=httpx2.MockTransport(self.respond_gemini)
+        ))
+        env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video",
+               "AUDYSSEY_PLANNER_BASE_URL": "https://gemini.test/v1beta",
+               "AUDYSSEY_PLANNER_FPS": "3", "AUDYSSEY_PLANNER_VIDEO_AUDIO": "true"}
+        with client, patch.dict(os.environ, env):
+            self.responses = ["broken", json.dumps({"sources": [self.source()]})]
+            result = real.plan(self.video, self.audio, 2, [])
+        self.assertEqual([p.name for p in result], ["person"])
+        self.assertEqual(calls, [True])
+        first, second = self.requests
+        self.assertEqual(first["url"], "https://gemini.test/v1beta/models/fake-model:generateContent")
+        self.assertEqual(first["key"], "fake-key")
+        label, video, text = first["contents"][0]["parts"]
+        self.assertEqual(label, {"text": "Video from 0 to 2 seconds"})
+        self.assertEqual(video, {
+            "inline_data": {"mime_type": "video/mp4", "data": base64.b64encode(b"clip-bytes").decode()},
+            "video_metadata": {"fps": 3.0},
+        })
+        self.assertIn("Video duration: 2 seconds", text["text"])
+        self.assertIn("audio track", first["system_instruction"]["parts"][0]["text"])
+        self.assertEqual(first["generationConfig"], {"responseMimeType": "application/json"})
+        self.assertEqual(second["contents"][0]["parts"][-1], {"text": "Return valid JSON matching the schema."})
+
+    def test_gemini_api_error_masks_key(self):
+        from audyssey.tools.planning.llm import gemini_client
+
+        self.clip()
+        client = patch("audyssey.tools.planning.llm.gemini_client", side_effect=lambda settings: gemini_client(
+            settings, transport=httpx2.MockTransport(lambda request: httpx2.Response(400, text="bad key fake-key"))
+        ))
+        env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video",
+               "AUDYSSEY_PLANNER_BASE_URL": "https://gemini.test/v1beta"}
+        with client, patch.dict(os.environ, env):
+            with self.assertRaisesRegex(RuntimeError, "400") as caught:
+                real.plan(self.video, self.audio, 2, [])
+        self.assertNotIn("fake-key", str(caught.exception))
+        self.assertIn("***", str(caught.exception))
+
+    def visible(self, **updates):
+        hint = {"time": 1, "box": [0.1, 0.1, 0.5, 0.5], "description": "person"}
+        return SourcePlan(**self.source(visual_hint=hint, **updates))
+
+    def test_validate_checks_each_source_in_its_spans(self):
+        plans = [
+            self.visible(spans=[{"start": 0.5, "end": 1.0}, {"start": 1.5, "end": 2.0}]),
+            self.visible(name="dog", description="a dog barking"),
+        ]
+        self.responses = [json.dumps({"present": False, "reason": "no person here"}),
+                          json.dumps({"present": True, "reason": "dog visible"})]
+        issues = real.validate_plan(self.video, self.audio, plans)
+        self.assertEqual(issues, [PlanIssue(source_name="person", kind="not_found",
+                                            message="person: no person here")])
+        first, second = self.requests
+        text = "\n".join(p["text"] for p in first["messages"][1]["content"] if p["type"] == "text")
+        self.assertIn('"name": "person"', text)
+        self.assertIn("0.5-1, 1.5-2", text)
+        self.assertIn("Frame at 0.25 seconds", text)
+        self.assertIn("judge by the sound's producer", first["messages"][0]["content"])
+        # One frame per 0.5 s span at 1 fps; no spans means the whole video.
+        windows = [(call.args[1], call.args[3], call.args[4]) for call in self.frames.call_args_list]
+        self.assertEqual(windows, [(1, 0.5, 1.0), (1, 1.5, 2.0), (2, 0, 2.0)])
+        self.assertIn("0-2", "\n".join(p["text"] for p in second["messages"][1]["content"] if p["type"] == "text"))
+
+    def test_validate_skips_music_and_ambience_without_audio(self):
+        unseen = [SourcePlan(**self.source(name="wind", kind="ambience")),
+                  SourcePlan(**self.source(name="score", kind="music"))]
+        self.assertEqual(real.validate_plan(self.video, self.audio, unseen), [])
+        self.assertEqual(self.requests, [])
+        # Onscreen-ness comes from kind, not from an optional visual hint.
+        self.responses = [json.dumps({"present": True})]
+        self.assertEqual(real.validate_plan(self.video, self.audio, [SourcePlan(**self.source())]), [])
+        self.assertEqual(len(self.requests), 1)
+
+    def test_validate_hears_video_clips_with_audio(self):
+        calls = self.clip(windows=True)
+        env = {"AUDYSSEY_VALIDATOR_INPUT": "video", "AUDYSSEY_VALIDATOR_VIDEO_AUDIO": "true",
+               "AUDYSSEY_VALIDATOR_FPS": "4"}
+        offscreen = SourcePlan(**self.source(name="wind", kind="ambience",
+                                             spans=[{"start": 0, "end": 1}, {"start": 1.5, "end": 2}]))
+        self.responses = [json.dumps({"present": True})]
+        with patch.dict(os.environ, env):
+            self.assertEqual(real.validate_plan(self.video, self.audio, [offscreen]), [])
+        self.assertEqual(calls, [(True, 0, 1), (True, 1.5, 2)])
+        request = self.requests[0]
+        types = [p["type"] for p in request["messages"][1]["content"]]
+        self.assertEqual(types, ["text", "text", "video_url", "text", "video_url"])
+        self.assertEqual(request["media_io_kwargs"], {"video": {"fps": 4.0, "num_frames": -1}})
+        self.assertEqual(request["mm_processor_kwargs"], {"use_audio_in_video": True})
+        self.assertIn("seen or heard", request["messages"][0]["content"])
+        self.assertNotIn("cannot hear", request["messages"][0]["content"])
+
+    def test_validator_uses_its_own_model(self):
+        env = {"AUDYSSEY_VALIDATOR_MODEL": "validator-model"}
+        self.responses = [json.dumps({"present": True})]
+        with patch.dict(os.environ, env):
+            real.validate_plan(self.video, self.audio, [self.visible()])
+            self.plan([self.source()])
+        self.assertEqual([r["model"] for r in self.requests], ["validator-model", "fake-model"])
+
+    def test_validate_bad_json_treats_source_as_present(self):
+        for bad in ["bad", '{}', '{"present": "maybe"}', '[]']:
             with self.subTest(bad=bad):
                 self.requests.clear()
                 self.responses = [bad, bad]
                 with self.assertLogs(real.__name__, level="WARNING") as logs:
-                    self.assertEqual(real.validate_plan(self.video, self.audio, []), [])
+                    self.assertEqual(real.validate_plan(self.video, self.audio, [self.visible()]), [])
                 self.assertEqual(len(self.requests), 2)
                 self.assertTrue(logs.output)
 

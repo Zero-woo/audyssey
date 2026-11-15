@@ -83,6 +83,38 @@ class MediaTests(unittest.TestCase):
                 ]))
                 self.assertEqual(info["streams"][0]["width"], 160)
 
+    def test_planner_clip_downscales_and_controls_audio(self):
+        from audyssey.media import planner_clip, probe
+
+        wide = self.root / "wide-audio.mp4"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-i", str(self.video),
+            "-vf", "scale=1024:768", str(wide),
+        ], check=True, capture_output=True)
+        self.assertGreater(probe(wide)[1], 0)
+        for audio in (True, False):
+            with self.subTest(audio=audio):
+                clip = planner_clip(wide, self.root / f"clip-{audio}.mp4", audio)
+                width = subprocess.check_output([
+                    "ffprobe", "-v", "error", "-show_entries", "stream=width",
+                    "-select_streams", "v:0", "-of", "csv=p=0", str(clip),
+                ], text=True)
+                self.assertEqual(int(width), 512)
+                duration, channels = probe(clip)
+                self.assertAlmostEqual(duration, probe(wide)[0], delta=0.2)
+                self.assertEqual(channels, 1 if audio else 0)
+
+    def test_frames_and_clips_cover_a_time_range(self):
+        from audyssey.media import MediaError, extract_frames, planner_clip, probe
+
+        frames = extract_frames(self.video, 2, self.root / "range", 1.0, 2.0)
+        self.assertEqual([time for time, _ in frames], [1.25, 1.75])
+        clip = planner_clip(self.video, self.root / "range.mp4", True, 1.0, 2.0)
+        self.assertAlmostEqual(probe(clip)[0], 1.0, delta=0.15)
+        for start, end in [(2.0, 1.0), (5.0, None)]:
+            with self.assertRaises(MediaError):
+                extract_frames(self.video, 1, self.root / "bad", start, end)
+
     def test_extract_frames_downscales_and_handles_short_video(self):
         from audyssey.media import extract_frames
 

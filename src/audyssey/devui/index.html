@@ -130,7 +130,15 @@ $('upload').onsubmit = async event => {
     if (events) events.close();
     job = undefined; show(data);
     events = new EventSource(`/api/jobs/${job.id}/events`);
-    events.onmessage = event => show(JSON.parse(event.data));
+    // The dev UI keeps the old one-step flow: start as soon as preprocessing ends.
+    let started = false;
+    events.onmessage = event => {
+      const next = JSON.parse(event.data); show(next);
+      if (next.state === 'new' && !started) {
+        started = true;
+        request(`/api/jobs/${next.id}/start`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({method: next.silent ? 'generate' : 'separate'})}).catch(fail);
+      }
+    };
     events.onerror = () => { $('status').textContent = '연결을 다시 시도하는 중…'; };
   } catch (error) { fail(error); }
 };

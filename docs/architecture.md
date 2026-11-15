@@ -7,7 +7,7 @@
 
 | 구성 | 하는 일 | 실행 환경 |
 |---|---|---|
-| main 서버 | 흐름 실행, 명령 처리, 작업 저장, 개발용 화면. GPU를 쓰지 않음 | `audyssey-app` 이미지 (Python 3.13) |
+| main 서버 | 흐름 실행, 명령 처리, 작업 저장, 화면. GPU를 쓰지 않음 | `audyssey-app` 이미지 (Python 3.13) |
 | 도구 서버 | SAM Audio(분리), Judge(평가), SAM3(위치 찾기)를 HTTP로 제공 | `audyssey-tools` 이미지 (CUDA 12.8, Python 3.12) |
 | 플래너 LLM | 소스 계획과 계획 검증. 주소만 바꾸면 Gemini와 vLLM을 오갈 수 있음 | Gemini API 또는 vLLM 서버 |
 
@@ -106,13 +106,19 @@ add_source(plan, method="separate")          render(include_residual_stem)
 **main 서버 API.** UI는 아래 API만 쓰면 됩니다.
 
 ```
-POST /api/jobs                    multipart(video) → Job (업로드 후 자동 진행)
+POST /api/jobs                    multipart(video) → Job (전처리까지만, state "new")
+POST /api/jobs/{id}/start         {method: separate|generate} → Job | 409(이미 시작) | 422(무음 영상에 separate)
 GET  /api/jobs                    → Job 요약 목록
 GET  /api/jobs/{id}               → Job
 GET  /api/jobs/{id}/events        SSE: 상태가 바뀔 때마다 Job 전송
 POST /api/jobs/{id}/commands      Command → Job | 404(없는 소스) | 409(실행 중) | 422(형식·검증 오류)
 GET  /api/jobs/{id}/files/{path}  작업 폴더의 오디오·영상·파형 파일
+GET  /api/jobs/{id}/trace         단계별 모델 호출 기록 (입력, 프롬프트, 보낸 프레임·클립, 응답, 걸린 시간)
+GET  /api/jobs/{id}/export        합친 영상, 믹스, stem을 묶은 zip (합치기 전이면 409)
+GET  /api/system                  서버별로 어떤 단계와 모델이 도는지, 응답하는지
 ```
+
+호출 기록은 작업 폴더의 `trace.jsonl`에 쌓이고, 호출이 주고받은 파일은 `trace/<호출 id>/`에 복사됩니다. 재시도가 트랙을 덮어써도 각 시도의 결과를 들어 볼 수 있습니다.
 
 **도구 서버 API.** `/health`를 빼면 모두 `Authorization: Bearer $AUDYSSEY_TOOL_TOKEN`이 필요합니다.
 
@@ -136,11 +142,13 @@ src/audyssey/
   settings.py    AUDYSSEY_* 환경변수 (pydantic-settings)
   graph.py       LangGraph 흐름, 검증 루프, 명령 처리
   store.py       Job ↔ work/jobs/<id>/job.json
-  api.py         HTTP API + 개발용 화면
+  api.py         HTTP API + 화면
+  trace.py       단계별 모델 호출 기록, 서버 배치
   toolserver.py  도구 서버
   cli.py         audyssey serve | audyssey tool-server
   media.py       ffmpeg 추출·프레임·WAV 입출력
-  devui/         빌드 없는 개발용 화면 (최종 UI 아님)
+  ui/            시연용 화면 (/, 빌드 없음)
+  devui/         개발용 화면 (/dev)
   tools/
     planning/    stub.py real.py llm.py      plan, validate_plan
     separation/  stub.py real.py remote.py   separate (SAM Audio)

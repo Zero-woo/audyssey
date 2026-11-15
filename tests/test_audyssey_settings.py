@@ -81,13 +81,50 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(grounder='unknown')
 
-    def test_planner_frames_bounds_and_env(self):
-        self.assertEqual(Settings().planner_frames, 4)
-        with patch.dict(os.environ, AUDYSSEY_PLANNER_FRAMES="8"):
-            self.assertEqual(Settings().planner_frames, 8)
-        for count in (0, 17):
+    def test_planner_max_frames_bounds_and_env(self):
+        self.assertEqual(Settings().planner_max_frames, 32)
+        with patch.dict(os.environ, AUDYSSEY_PLANNER_MAX_FRAMES="8"):
+            self.assertEqual(Settings().planner_max_frames, 8)
+        for count in (0, 257):
             with self.assertRaises(ValidationError):
-                Settings(planner_frames=count)
+                Settings(planner_max_frames=count)
+
+    def test_validator_endpoint_falls_back_to_planner(self):
+        settings = Settings(planner_base_url="http://planner/v1", planner_model="p",
+                            planner_api_key="k", planner_fps=2)
+        self.assertEqual(settings.validator_endpoint(), settings.planner_endpoint())
+        env = {"AUDYSSEY_VALIDATOR_BASE_URL": "http://validator/v1", "AUDYSSEY_VALIDATOR_MODEL": "v",
+               "AUDYSSEY_VALIDATOR_INPUT": "video", "AUDYSSEY_VALIDATOR_VIDEO_AUDIO": "true"}
+        with patch.dict(os.environ, env):
+            settings = Settings(planner_base_url="http://planner/v1", planner_model="p",
+                                planner_api_key="k", planner_fps=2)
+        validator = settings.validator_endpoint()
+        self.assertEqual((validator.base_url, validator.model, validator.input, validator.video_audio),
+                         ("http://validator/v1", "v", "video", True))
+        self.assertEqual((validator.api_key, validator.fps, validator.api), ("k", 2, "openai"))
+        self.assertEqual(settings.planner_endpoint().model, "p")
+        with self.assertRaises(ValidationError):
+            Settings(validator_api="gemini")
+        Settings(validator_api="gemini", validator_input="video")
+
+    def test_planner_input_settings(self):
+        settings = Settings()
+        self.assertEqual(
+            (settings.planner_api, settings.planner_input, settings.planner_fps, settings.planner_video_audio),
+            ("openai", "frames", 1.0, False),
+        )
+        env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video",
+               "AUDYSSEY_PLANNER_FPS": "2.5", "AUDYSSEY_PLANNER_VIDEO_AUDIO": "true"}
+        with patch.dict(os.environ, env):
+            settings = Settings()
+        self.assertEqual(
+            (settings.planner_api, settings.planner_input, settings.planner_fps, settings.planner_video_audio),
+            ("gemini", "video", 2.5, True),
+        )
+        for bad in ({"planner_fps": 0}, {"planner_fps": 31}, {"planner_api": "x"}, {"planner_input": "x"},
+                    {"planner_api": "gemini", "planner_input": "frames"}):
+            with self.subTest(bad=bad), self.assertRaises(ValidationError):
+                Settings(**bad)
 
     def test_generation_settings_from_env(self):
         values = {"GENERATOR": "remote", "GENERATOR_URL": "http://generation:8700", "GEN_BASE_MODEL": "base", "GEN_MODEL": "private/ft", "GEN_GENERATOR_FILE": "g.pth", "GEN_ENCODER_FILE": "e.pt", "GEN_DEVICE": "cpu", "GEN_STEPS": "5", "GEN_CFG": "3.5", "GEN_SEED": "17", "GEN_SINGLE_MAX_S": "9", "GEN_WINDOW_S": "7", "MAX_GENERATION_RETRIES": "0", "GENERATION_MARGIN_THRESHOLD": "0.2"}

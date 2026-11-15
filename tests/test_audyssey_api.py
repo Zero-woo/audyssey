@@ -33,24 +33,52 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
-    def ready(self, name="clip.mp4"):
-        job_id = self.upload(name)
+    def wait(self, job_id, state):
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             job = self.client.get(f"/api/jobs/{job_id}").json()
             if job["state"] != "running":
-                self.assertEqual(job["state"], "ready", job)
+                self.assertEqual(job["state"], state, job)
                 return job
             time.sleep(0.1)
         self.fail("analysis timed out")
+
+    def ready(self, name="clip.mp4", method="separate"):
+        job_id = self.upload(name)
+        self.wait(job_id, "new")
+        response = self.client.post(f"/api/jobs/{job_id}/start", json={"method": method})
+        self.assertEqual(response.status_code, 200, response.text)
+        return self.wait(job_id, "ready")
 
     def test_upload_runs_analysis_to_ready(self):
         self.assertEqual(len(self.ready()["sources"]), 3)
         self.assertEqual(len(self.client.get("/api/jobs").json()), 1)
 
+    def test_upload_waits_for_start(self):
+        job = self.wait(self.upload(), "new")
+        self.assertEqual([s["key"] for s in job["steps"]], ["preprocess"])
+        self.assertEqual(job["sources"], [])
+
+    def test_start_twice_is_rejected(self):
+        job = self.ready()
+        response = self.client.post(f"/api/jobs/{job['id']}/start", json={"method": "separate"})
+        self.assertEqual(response.status_code, 409)
+
+    def test_generate_start_generates_every_source(self):
+        job = self.ready(method="generate")
+        self.assertEqual(job["method"], "generate")
+        self.assertTrue(all(s["origin"] == "generated" for s in job["sources"]))
+        self.assertIsNone(job["residual"]["path"])
+
+    def test_silent_video_cannot_start_separation(self):
+        self.video = make_video(self.root / "silent.mp4", audio=False)
+        job = self.wait(self.upload("silent.mp4"), "new")
+        response = self.client.post(f"/api/jobs/{job['id']}/start", json={"method": "separate"})
+        self.assertEqual(response.status_code, 422)
+
     def test_upload_accepts_no_audio(self):
         self.video = make_video(self.root / "silent.mp4", audio=False)
-        job = self.ready("silent.mp4")
+        job = self.ready("silent.mp4", method="generate")
         self.assertTrue(job["silent"])
         self.assertIsNone(job["residual"]["path"])
 
@@ -144,7 +172,7 @@ class ApiTests(unittest.TestCase):
 
         with patch.object(store, "save", checking_save):
             job = self.ready()
-            self.assertEqual(held, [False])
+            self.assertEqual(held, [False, False])
             response = self.command(job["id"], {"type": "render"})
         self.assertEqual(response.status_code, 200, response.text)
 
@@ -188,10 +216,54 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(self.command(job["id"], data).status_code, status)
             self.assertEqual(self.client.get(f"/api/jobs/{job['id']}").json(), before)
 
-    def test_root_serves_dev_ui(self):
+    def test_root_serves_demo_ui_and_dev_ui_moves(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Audyssey dev UI", response.text)
+        self.assertIn('id="board"', response.text)
+        self.assertIn("Audyssey dev UI", self.client.get("/dev").text)
+
+    def test_trace_records_each_step_with_its_server(self):
+        job = self.ready()
+        self.command(job["id"], {"type": "render"})
+        calls = self.client.get(f"/api/jobs/{job['id']}/trace").json()
+        tools = [c["tool"] for c in calls]
+        self.assertEqual(tools[:3], ["preprocess", "plan", "validate_plan"])
+        # Stub judging fails one source once, so it is separated twice.
+        separated = {c["step"] for c in calls if c["tool"] == "separate"}
+        self.assertEqual(separated, {"separate:s1", "separate:s2", "separate:s3"})
+        self.assertEqual(tools[-2:], ["residual", "render"])
+        separate = next(c for c in calls if c["tool"] == "separate")
+        self.assertEqual(separate["step"], "separate:s1")
+        self.assertEqual(separate["server"], "App server")
+        self.assertEqual(separate["inputs"]["plan"]["name"], job["sources"][0]["plan"]["name"])
+        # Outputs are snapshotted so retries that overwrite the track keep this one.
+        snapshot = separate["output"]["file"]
+        self.assertTrue(snapshot.startswith(f"trace/{separate['id']}/"))
+        self.assertEqual(self.client.get(f"/api/jobs/{job['id']}/files/{snapshot}").status_code, 200)
+        render = calls[-1]["output"]
+        self.assertEqual(render["video"], {"file": "out/video.mp4"})
+        self.assertEqual(self.client.get("/api/jobs/0123456789ab/trace").status_code, 404)
+
+    def test_system_lists_servers_in_pipeline_order(self):
+        lanes = self.client.get("/api/system").json()
+        self.assertEqual([lane["id"] for lane in lanes], ["app"])
+        self.assertTrue(lanes[0]["up"])
+        self.assertEqual(lanes[0]["steps"][0], "preprocess")
+        self.assertEqual(lanes[0]["steps"][-1], "render")
+
+    def test_export_zips_render_outputs(self):
+        import io
+        import zipfile
+
+        job = self.ready()
+        self.assertEqual(self.client.get(f"/api/jobs/{job['id']}/export").status_code, 409)
+        self.command(job["id"], {"type": "render"})
+        response = self.client.get(f"/api/jobs/{job['id']}/export")
+        self.assertEqual(response.status_code, 200)
+        names = zipfile.ZipFile(io.BytesIO(response.content)).namelist()
+        self.assertIn("video.mp4", names)
+        self.assertIn("mix.wav", names)
+        self.assertTrue(any(n.startswith("stems/") for n in names))
 
     def test_generation_command_errors_are_422(self):
         job = self.ready()
@@ -212,7 +284,7 @@ class ApiTests(unittest.TestCase):
 
     def test_silent_separation_commands_are_422(self):
         self.video = make_video(self.root / "silent.mp4", audio=False)
-        job = self.ready()
+        job = self.ready(method="generate")
         for command in [
             {"type": "reseparate", "source_id": "s3"},
             {"type": "add_source", "plan": {"name": "extra", "kind": "sfx", "description": "sound"}},

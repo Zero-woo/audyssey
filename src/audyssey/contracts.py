@@ -118,7 +118,9 @@ class Job(Model):
     plan_issues: list[PlanIssue] = Field(default_factory=list)
     steps: list[StepStatus] = Field(default_factory=list)
     outputs: RenderOutput | None = None
-    state: Literal["running", "ready", "failed"] = "running"
+    # "new": uploaded and preprocessed, waiting for the user to pick a method.
+    state: Literal["new", "running", "ready", "failed"] = "running"
+    method: Literal["separate", "generate"] | None = None
     version: int = 0
     error: str | None = None
 
