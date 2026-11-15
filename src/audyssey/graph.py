@@ -2,11 +2,12 @@ import json
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from langsmith import traceable
 from langgraph.graph import END, START, StateGraph
 
+from audyssey import trace
 from audyssey.contracts import (
     AddSource,
     Command,
@@ -68,6 +69,8 @@ def check_plans(
 
 
 def update_step(job: Job, ctx: Context, step: StepStatus) -> None:
+    if step.status == "running":
+        trace.set_step(step.key)
     job.steps = [s for s in job.steps if s.key != step.key] + [step]
     ctx.store.save(job)
 
@@ -309,15 +312,16 @@ def refresh_residual(job: Job, ctx: Context) -> None:
         return
     directory = ctx.store.dir(job.id)
     update_step(job, ctx, StepStatus(key="residual", status="running"))
-    compute_residual(
-        directory / job.audio_path,
-        [
-            directory / s.track_path
-            for s in job.sources
-            if s.origin == "separated" and s.track_path
-        ],
-        directory / "residual.wav",
-    )
+    tracks = [
+        directory / s.track_path
+        for s in job.sources
+        if s.origin == "separated" and s.track_path
+    ]
+    audio = directory / job.audio_path
+    inputs = {"audio": audio, "tracks": tracks}
+    with trace.step(directory, "residual", trace.describe(inputs, directory)) as record:
+        out = compute_residual(audio, tracks, directory / "residual.wav")
+        record.output = trace.describe(out, directory, record)
     job.residual.path = "residual.wav"
     update_step(job, ctx, StepStatus(key="residual", status="done"))
 
@@ -327,10 +331,18 @@ def analyze(
 ) -> Job:
     """Run the analysis graph. on_finish runs before the final state is saved."""
     directory = ctx.store.dir(job.id)
+    ctx = replace(ctx, tools=trace.wrap_tools(ctx.tools, directory, ctx.settings))
     active_key = "preprocess"
 
     def preprocess(state: AnalysisState) -> dict:
         update_step(job, ctx, StepStatus(key="preprocess", status="running"))
+        video = {"video": trace.describe(directory / job.video_path, directory)}
+        with trace.step(directory, "preprocess", video) as record:
+            extract(record)
+        update_step(job, ctx, StepStatus(key="preprocess", status="done"))
+        return {}
+
+    def extract(record: trace.Call) -> None:
         duration, channels = probe(directory / job.video_path)
         job.duration = duration
         if channels == 0:
@@ -352,8 +364,13 @@ def analyze(
         (directory / job.peaks_path).write_text(
             json.dumps(compute_peaks(directory / job.audio_path))
         )
-        update_step(job, ctx, StepStatus(key="preprocess", status="done"))
-        return {}
+        record.output = {
+            "duration": duration,
+            "channels": channels,
+            "silent": job.silent,
+            "audio": trace.describe(directory / job.audio_path, directory),
+            "mono": trace.describe(directory / job.mono_path, directory),
+        }
 
     def plan(state: AnalysisState) -> dict:
         nonlocal active_key
@@ -525,10 +542,31 @@ def analyze(
 
 
 def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
+    directory = ctx.store.dir(job.id)
+    ctx = replace(ctx, tools=trace.wrap_tools(ctx.tools, directory, ctx.settings))
     if isinstance(cmd, Render):
         update_step(job, ctx, StepStatus(key="render", status="running"))
         try:
-            job.outputs = render(job, ctx.store.dir(job.id), cmd.include_residual_stem)
+            mix = [
+                {
+                    "source": s.id,
+                    "keep": s.keep,
+                    "gain": s.gain,
+                    "pitch": s.pitch_semitones,
+                }
+                for s in job.sources
+            ]
+            with trace.step(directory, "render", {"sources": mix}) as record:
+                job.outputs = render(job, directory, cmd.include_residual_stem)
+                outputs = job.outputs
+                record.output = trace.describe(
+                    {
+                        "video": directory / outputs.video_mp4,
+                        "mix": directory / outputs.mix_wav,
+                        "stems": [directory / stem for stem in outputs.stems],
+                    },
+                    directory,
+                )
         except Exception as exc:
             update_step(
                 job, ctx, StepStatus(key="render", status="failed", message=str(exc))

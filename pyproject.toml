@@ -9,6 +9,7 @@ module-root = "src"
 [tool.uv-build]
 include = [
     "src/audyssey/devui/*.html",
+    "src/audyssey/ui/*.html",
 ]
 
 [project]

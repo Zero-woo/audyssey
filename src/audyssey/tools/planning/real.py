@@ -14,6 +14,7 @@ from openai.types.chat import ChatCompletionContentPartParam, ChatCompletionMess
 from pydantic import TypeAdapter, ValidationError
 
 from audyssey import media
+from audyssey import trace as job_trace
 from audyssey.contracts import Model, PlanIssue, SourcePlan, Span, VisualHint
 from audyssey.settings import LLMEndpoint, Settings
 from audyssey.tools.planning import llm
@@ -206,6 +207,8 @@ def _request(
 ) -> _Response:
     backend = _gemini if endpoint.api == "gemini" else _chat
     send = backend(endpoint, system, text, parts)
+    record = job_trace.current()
+    sent = _keep_media(record, parts) if record else []
     raw = None
     for attempt in range(2):
         # Record model/usage only: the SDK wrapper would also trace media bytes.
@@ -218,6 +221,22 @@ def _request(
             with tracing_context(enabled=False, parent=False):
                 raw, usage = send(attempt > 0)
             run.end(outputs={"usage_metadata": usage} if usage else {})
+        if record:
+            record.requests.append(
+                {
+                    "model": endpoint.model,
+                    "api": endpoint.api,
+                    "input": endpoint.input,
+                    "fps": endpoint.fps,
+                    "audio": endpoint.video_audio,
+                    "attempt": attempt + 1,
+                    "system": system,
+                    "text": text + ("\n" + _RETRY if attempt else ""),
+                    "media": sent,
+                    "raw": raw,
+                    "usage": usage,
+                }
+            )
         try:
             data = json.loads(raw or "")
             if isinstance(data, list) and len(response_type.model_fields) == 1:
@@ -231,6 +250,20 @@ def _request(
     if endpoint.api_key:
         excerpt = excerpt.replace(endpoint.api_key, "***")
     raise _InvalidJSON(f"planner returned invalid JSON: {excerpt[:500]}") from None
+
+
+def _keep_media(record: job_trace.Call, parts: list[_Part]) -> list[dict[str, str]]:
+    """Save the frames and clips a request sends, labelled by their time."""
+    kept, label = [], ""
+    batch = len(record.requests)
+    for i, (kind, value) in enumerate(parts):
+        if kind == "text":
+            label = value
+            continue
+        name = f"{batch}-{i}.{'jpg' if kind == 'image' else 'mp4'}"
+        file = record.save(name, base64.b64decode(value))
+        kept.append({"kind": kind, "label": label, "file": file})
+    return kept
 
 
 def _hears(endpoint: LLMEndpoint) -> bool:
