@@ -517,6 +517,8 @@ function drawTracks() {
     id: s.id, name: s.plan.name, keep: s.keep, gain: s.gain, pitch: s.pitch_semitones, path: s.track_path,
     sub: `${KIND[s.plan.kind] || s.plan.kind}, ${s.origin === "generated" ? "생성" : "분리"}, ${STATUS[s.status]}${s.filter ? (s.filter.passed ? ", 통과" : ", 미통과") : ""}`,
     redo: s.status !== "skipped", generated: s.origin === "generated", ready,
+    // A separated sound (not speech) can be replaced by a generated one.
+    canGenerate: s.origin === "separated" && s.plan.kind !== "dialogue" && !job.sources.some((o) => o.replaces === s.id),
   }));
   if (job.residual.path) rows.push(trackRow({ id: "residual", name: "나머지 소리", keep: job.residual.keep, gain: job.residual.gain, pitch: null, path: job.residual.path, sub: "소스로 나뉘지 않은 소리", redo: false, ready }));
   box.replaceChildren(...rows);
@@ -543,7 +545,8 @@ function trackRow(t) {
       () => edit({ type: "set_pitch", source_id: t.id, semitones: t.pitch + 1 }), -12, 12),
     el("span", { class: "tools" },
       el("button", { class: "btn small", disabled: !t.ready, "aria-pressed": String(t.keep), onclick: () => edit({ type: t.keep ? "drop" : "keep", source_id: t.id }) }, t.keep ? "끄기" : "켜기"),
-      t.redo ? el("button", { class: "btn small", disabled: !t.ready, onclick: () => edit({ type: t.generated ? "generate" : "reseparate", source_id: t.id }) }, "다시 만들기") : null)));
+      t.redo ? el("button", { class: "btn small", disabled: !t.ready, onclick: () => edit({ type: t.generated ? "generate" : "reseparate", source_id: t.id }) }, t.generated ? "다시 생성" : "다시 분리") : null,
+      t.canGenerate ? el("button", { class: "btn small", disabled: !t.ready, onclick: () => edit({ type: "generate", source_id: t.id }) }, "생성으로 바꾸기") : null)));
 }
 const round = (x) => Math.round(x * 100) / 100;
 
