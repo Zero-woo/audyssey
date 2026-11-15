@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
+from typing import Literal
 from dataclasses import dataclass, field, replace
 
 from langsmith import traceable
@@ -307,7 +308,8 @@ class AnalysisState:
 
 
 def refresh_residual(job: Job, ctx: Context) -> None:
-    if job.silent:
+    # Generation replaces the soundtrack; the original stays available as the source audio.
+    if job.silent or job.method == "generate":
         job.residual.path = None
         return
     directory = ctx.store.dir(job.id)
@@ -327,10 +329,19 @@ def refresh_residual(job: Job, ctx: Context) -> None:
 
 
 def analyze(
-    job: Job, ctx: Context, on_finish: Callable[[], None] = lambda: None
+    job: Job,
+    ctx: Context,
+    on_finish: Callable[[], None] = lambda: None,
+    method: Literal["separate", "generate"] | None = "separate",
 ) -> Job:
-    """Run the analysis graph. on_finish runs before the final state is saved."""
+    """Run the analysis graph. on_finish runs before the final state is saved.
+
+    method=None only preprocesses and leaves the job "new"; a later call with a
+    method skips preprocessing and plans. Silent videos always generate.
+    """
     directory = ctx.store.dir(job.id)
+    if method is not None:
+        job.method = "generate" if job.silent else method
     ctx = replace(ctx, tools=trace.wrap_tools(ctx.tools, directory, ctx.settings))
     active_key = "preprocess"
 
@@ -403,7 +414,9 @@ def analyze(
                 source = Source(
                     id=f"s{i}",
                     plan=plan_item,
-                    origin="generated" if job.silent else "separated",
+                    origin="generated"
+                    if job.silent or job.method == "generate"
+                    else "separated",
                 )
             else:
                 source.id, source.plan = f"s{i}", plan_item
@@ -505,8 +518,16 @@ def analyze(
         ("residual", residual),
     ]:
         builder.add_node(name, node)
-    builder.add_edge(START, "preprocess")
-    builder.add_edge("preprocess", "plan")
+    prepared = bool(job.audio_path)
+    if method is None:
+        builder.add_edge(START, "preprocess")
+        builder.add_edge("preprocess", END)
+    elif prepared:
+        builder.add_edge(START, "plan")
+    else:
+        builder.add_edge(START, "preprocess")
+    if method is not None and not prepared:
+        builder.add_edge("preprocess", "plan")
     builder.add_edge("plan", "validate")
     builder.add_conditional_edges(
         "validate",
@@ -535,7 +556,7 @@ def analyze(
     # Set the final state only now: the job object is shared, so any save after
     # this line publishes it, and on_finish must already have run.
     if error is None:
-        job.state = "ready"
+        job.state = "new" if method is None else "ready"
     else:
         job.state, job.error = "failed", error
     return ctx.store.save(job)

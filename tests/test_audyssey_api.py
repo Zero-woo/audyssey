@@ -33,24 +33,52 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["id"]
 
-    def ready(self, name="clip.mp4"):
-        job_id = self.upload(name)
+    def wait(self, job_id, state):
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             job = self.client.get(f"/api/jobs/{job_id}").json()
             if job["state"] != "running":
-                self.assertEqual(job["state"], "ready", job)
+                self.assertEqual(job["state"], state, job)
                 return job
             time.sleep(0.1)
         self.fail("analysis timed out")
+
+    def ready(self, name="clip.mp4", method="separate"):
+        job_id = self.upload(name)
+        self.wait(job_id, "new")
+        response = self.client.post(f"/api/jobs/{job_id}/start", json={"method": method})
+        self.assertEqual(response.status_code, 200, response.text)
+        return self.wait(job_id, "ready")
 
     def test_upload_runs_analysis_to_ready(self):
         self.assertEqual(len(self.ready()["sources"]), 3)
         self.assertEqual(len(self.client.get("/api/jobs").json()), 1)
 
+    def test_upload_waits_for_start(self):
+        job = self.wait(self.upload(), "new")
+        self.assertEqual([s["key"] for s in job["steps"]], ["preprocess"])
+        self.assertEqual(job["sources"], [])
+
+    def test_start_twice_is_rejected(self):
+        job = self.ready()
+        response = self.client.post(f"/api/jobs/{job['id']}/start", json={"method": "separate"})
+        self.assertEqual(response.status_code, 409)
+
+    def test_generate_start_generates_every_source(self):
+        job = self.ready(method="generate")
+        self.assertEqual(job["method"], "generate")
+        self.assertTrue(all(s["origin"] == "generated" for s in job["sources"]))
+        self.assertIsNone(job["residual"]["path"])
+
+    def test_silent_video_cannot_start_separation(self):
+        self.video = make_video(self.root / "silent.mp4", audio=False)
+        job = self.wait(self.upload("silent.mp4"), "new")
+        response = self.client.post(f"/api/jobs/{job['id']}/start", json={"method": "separate"})
+        self.assertEqual(response.status_code, 422)
+
     def test_upload_accepts_no_audio(self):
         self.video = make_video(self.root / "silent.mp4", audio=False)
-        job = self.ready("silent.mp4")
+        job = self.ready("silent.mp4", method="generate")
         self.assertTrue(job["silent"])
         self.assertIsNone(job["residual"]["path"])
 
@@ -144,7 +172,7 @@ class ApiTests(unittest.TestCase):
 
         with patch.object(store, "save", checking_save):
             job = self.ready()
-            self.assertEqual(held, [False])
+            self.assertEqual(held, [False, False])
             response = self.command(job["id"], {"type": "render"})
         self.assertEqual(response.status_code, 200, response.text)
 
@@ -256,7 +284,7 @@ class ApiTests(unittest.TestCase):
 
     def test_silent_separation_commands_are_422(self):
         self.video = make_video(self.root / "silent.mp4", audio=False)
-        job = self.ready()
+        job = self.ready(method="generate")
         for command in [
             {"type": "reseparate", "source_id": "s3"},
             {"type": "add_source", "plan": {"name": "extra", "kind": "sfx", "description": "sound"}},

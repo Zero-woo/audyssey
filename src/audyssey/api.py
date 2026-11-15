@@ -59,9 +59,32 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
         lock.acquire()
         snapshot = job.model_copy(deep=True)
 
+        # Upload only preprocesses; the user starts separation or generation.
         # Release the lock before the final state is saved, so a client that sees
-        # ready/failed can run an execution command at once.
-        Thread(target=analyze, args=(job, ctx, lock.release), daemon=True).start()
+        # new/failed can start at once.
+        Thread(
+            target=analyze, args=(job, ctx, lock.release, None), daemon=True
+        ).start()
+        return snapshot
+
+    @app.post("/api/jobs/{job_id}/start")
+    def start(job_id: str, data: dict = Body(...)) -> Job:
+        method = data.get("method")
+        if method not in ("separate", "generate"):
+            raise HTTPException(422, "method must be separate or generate")
+        job = jobs.setdefault(job_id, load(job_id))
+        if job.state != "new":
+            raise HTTPException(409, "job has already started")
+        if method == "separate" and job.silent:
+            raise HTTPException(422, "silent videos only support generation")
+        lock = locks.setdefault(job_id, Lock())
+        if not lock.acquire(blocking=False):
+            raise HTTPException(409, "job is busy")
+        job.state = "running"
+        snapshot = ctx.store.save(job).model_copy(deep=True)
+        Thread(
+            target=analyze, args=(job, ctx, lock.release, method), daemon=True
+        ).start()
         return snapshot
 
     @app.get("/api/jobs")
