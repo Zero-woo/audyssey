@@ -106,7 +106,8 @@ add_source(plan, method="separate")          render(include_residual_stem)
 **main 서버 API.** UI는 아래 API만 쓰면 됩니다.
 
 ```
-POST /api/jobs                    multipart(video) → Job (업로드 후 자동 진행)
+POST /api/jobs                    multipart(video) → Job (전처리까지만, state "new")
+POST /api/jobs/{id}/start         {method: separate|generate} → Job | 409(이미 시작) | 422(무음 영상에 separate)
 GET  /api/jobs                    → Job 요약 목록
 GET  /api/jobs/{id}               → Job
 GET  /api/jobs/{id}/events        SSE: 상태가 바뀔 때마다 Job 전송
