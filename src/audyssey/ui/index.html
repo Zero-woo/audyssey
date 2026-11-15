@@ -14,17 +14,22 @@
   --surface: #FFFFFF;
   --sunken: #F7F8FA;
   --ink: #1B2130;
-  --muted: #6A7284;
+  --muted: #5B6377;
   --faint: #A3AAB8;
   --line: #E4E7EC;
   --accent: #3E4BB5;
   --accent-soft: #ECEEFB;
-  --video: #3B6FE0;
-  --audio: #D9861C;
-  --text: #1F9D84;
+  /* Data types on pipeline edges; kept 25° or more from the status hues below. */
+  --video: #2B7BBF;
+  --audio: #C8467A;
+  --text: #7E57C2;
   --bad: #CF3B32;
   --warn: #C27C12;
   --ok: #1F9D84;
+  --ok-ink: #13705E;
+  --bad-ink: #A8302A;
+  --info-ink: #1D6FA8;
+  --control-off: #8E95A3;
   --shadow: 0 0 0 1px rgb(27 33 48 / 0.06), 0 1px 2px rgb(27 33 48 / 0.06), 0 2px 8px rgb(27 33 48 / 0.04);
   --shadow-pop: 0 0 0 1px rgb(27 33 48 / 0.08), 0 8px 24px rgb(27 33 48 / 0.12), 0 2px 6px rgb(27 33 48 / 0.06);
   --r: 10px;
@@ -65,18 +70,20 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .project { height: 34px; padding: 0 30px 0 10px; border-radius: 8px; border: 1px solid transparent; box-shadow: var(--shadow); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%236A7284' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 14px; appearance: none; min-width: 230px; font-weight: 500; }
 .status { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-size: 13px; font-weight: 500; margin-left: auto; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
-.dot.run { background: var(--video); }
+.dot.run { background: var(--ink); }
 .dot.ok { background: var(--ok); }
 .dot.bad { background: var(--bad); }
 @media (prefers-reduced-motion: no-preference) { .dot.run { animation: pulse 1.2s ease-in-out infinite; } }
 @keyframes pulse { 50% { opacity: .3; } }
 .toast { position: fixed; left: 50%; bottom: 20px; translate: -50% 0; background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 30; max-width: 560px; display: flex; gap: 10px; align-items: center; }
 .toast .ibtn { color: #C9CDD8; }
+.toast small { display: block; color: #C9CDD8; font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
 
 /* layout */
-.app { display: grid; grid-template-columns: minmax(320px, 1fr) 2fr; grid-template-rows: auto 1fr; gap: 16px; padding: 16px 20px 20px; min-height: calc(100vh - 56px); }
+.app { display: grid; grid-template-columns: minmax(300px, 1fr) 2.6fr; grid-template-rows: auto 1fr; gap: 16px; padding: 16px 20px 20px; min-height: calc(100vh - 56px); }
 .panel { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); min-width: 0; }
-.panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0 16px; height: 44px; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 12px 14px 0 16px; min-height: 44px; }
+.panel-head h2 { white-space: nowrap; }
 .panel-head h2 { font-size: 13px; font-weight: 600; margin: 0; }
 .panel-head .meta { color: var(--muted); font-size: 12.5px; margin-left: auto; }
 
@@ -93,23 +100,23 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 /* pipeline */
 .pipeline { display: flex; flex-direction: column; min-height: 0; }
 .flow-wrap { padding: 4px 12px 12px; overflow-x: auto; }
-svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
+svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .edge { fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; opacity: .3; }
 .edge.done { opacity: .85; }
 .edge.active { opacity: .45; }
 .pulse { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 0.1 11; pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) { .pulse { animation: flow .6s linear infinite; } }
-.edge.video, .pulse.video { stroke: var(--video); } .edge.audio, .pulse.audio { stroke: var(--audio); } .edge.text, .pulse.text { stroke: var(--text); }
+.edge.video, .pulse.video { stroke: var(--video); } .edge.video { stroke-dasharray: 1 4.5; } .edge.audio, .pulse.audio { stroke: var(--audio); } .edge.text, .pulse.text { stroke: var(--text); } .edge.text { stroke-dasharray: 6 4; }
 .tip.video { fill: var(--video); } .tip.audio { fill: var(--audio); } .tip.text { fill: var(--text); }
 @keyframes flow { to { stroke-dashoffset: -11.1; } }
 .node { cursor: pointer; outline: none; }
 .node .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.25; transition-property: fill, stroke; transition-duration: 150ms; }
-.node .label { font-size: 14px; font-weight: 600; fill: var(--ink); }
-.node .model { font-size: 11.5px; fill: var(--muted); }
-.node .count { font-size: 11px; font-weight: 600; fill: var(--muted); }
+.node .label { font-size: 14.5px; font-weight: 600; fill: var(--ink); }
+.node .model { font-size: 12.5px; fill: var(--muted); }
+.node .count { font-size: 12px; font-weight: 600; fill: var(--muted); }
 .node text { pointer-events: none; }
 .node.done .box { stroke: #B9C0CC; }
-.node.running .box { stroke: var(--video); stroke-width: 2; }
+.node.running .box { stroke: var(--ink); stroke-width: 2; }
 .node.warning .box { stroke: var(--warn); stroke-width: 1.75; }
 .node.failed .box { stroke: var(--bad); stroke-width: 2; }
 .node.idle { opacity: .4; }
@@ -119,16 +126,17 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
 @media (hover: hover) { .node:hover .box { stroke: var(--ink); } }
 .badge circle { stroke: none; }
 .badge.done circle { fill: var(--ok); } .badge.warning circle { fill: var(--warn); } .badge.failed circle { fill: var(--bad); }
-.badge.running circle { fill: none; stroke: var(--video); stroke-width: 2; stroke-dasharray: 16 30; transform-box: fill-box; transform-origin: center; }
+.badge.running circle { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 16 30; transform-box: fill-box; transform-origin: center; }
 @media (prefers-reduced-motion: no-preference) { .badge.running circle { animation: rot .9s linear infinite; } }
 .badge path { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .legend { display: inline-flex; gap: 12px; color: var(--muted); font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.legend i { width: 14px; height: 2.5px; border-radius: 2px; }
+.legend .key { width: 22px; height: 8px; overflow: visible; }
+.legend .edge { opacity: 1; }
 .lane .band { fill: var(--sunken); }
 .lane.busy .band { fill: var(--accent-soft); }
-.lane .lname { font-size: 13px; font-weight: 600; fill: var(--ink); }
-.lane .lmodel { font-size: 11.5px; fill: var(--muted); }
+.lane .lname { font-size: 13.5px; font-weight: 600; fill: var(--ink); }
+.lane .lmodel { font-size: 12.5px; fill: var(--muted); }
 .lane .lmodel.down { fill: var(--bad); font-weight: 600; }
 .ldot.ok { fill: var(--ok); } .ldot.bad { fill: var(--bad); } .ldot.unknown { fill: none; stroke: var(--faint); stroke-width: 1.5; }
 
@@ -150,7 +158,9 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
 .thead { height: 34px; align-items: center; color: var(--muted); font-size: 12px; font-weight: 500; box-shadow: 0 1px 0 var(--line); }
 .thead > div:first-child { padding-left: 18px; }
 .ruler { position: relative; height: 100%; }
-.ruler span { position: absolute; top: 50%; translate: 0 -50%; font-size: 11.5px; color: var(--muted); }
+.scrub { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.ruler:has(.scrub:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.ruler span { position: absolute; pointer-events: none; top: 50%; translate: 0 -50%; font-size: 11.5px; color: var(--muted); }
 .ctl-head { display: grid; grid-template-columns: 52px 160px 104px 28px; gap: 0; padding-right: 14px; }
 .rows { position: relative; }
 .row { min-height: 62px; align-items: center; box-shadow: 0 1px 0 var(--line); }
@@ -164,7 +174,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
 .who { display: flex; align-items: center; gap: 10px; padding: 0 0 0 14px; min-width: 0; }
 .chip { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; }
 .chip svg.i { width: 15px; height: 15px; }
-.who b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 600; font-size: 13.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.who b { display: block; font-weight: 600; font-size: 13.5px; line-height: 1.3; overflow-wrap: anywhere; }
 .who small { display: block; color: var(--muted); font-size: 11.5px; }
 .wave { position: relative; height: 46px; margin: 8px 0; border-radius: 6px; cursor: pointer; overflow: hidden; }
 .wave canvas { width: 100%; height: 100%; display: block; }
@@ -175,7 +185,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
 .playhead::before { content: ""; position: absolute; top: -5px; left: -4px; width: 10px; height: 10px; border-radius: 3px; background: var(--ink); rotate: 45deg; }
 .ctl { display: grid; grid-template-columns: 52px 160px 104px 28px; align-items: center; padding-right: 14px; }
 
-.switch { width: 34px; height: 20px; border-radius: 999px; border: 0; padding: 2px; background: #D3D7DF; display: inline-flex; transition-property: background-color; transition-duration: 150ms; }
+.switch { width: 34px; height: 20px; border-radius: 999px; border: 0; padding: 2px; background: var(--control-off); display: inline-flex; transition-property: background-color; transition-duration: 150ms; }
 .switch::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); transition-property: translate; transition-duration: 150ms; transition-timing-function: var(--ease); }
 .switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"]::after { translate: 14px 0; }
@@ -183,8 +193,8 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
 .vol { display: flex; align-items: center; gap: 8px; }
 .vol output { width: 38px; text-align: right; font-size: 12px; color: var(--muted); }
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 110px; height: 20px; background: none; margin: 0; }
-input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, #DDE1E8; }
-input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: #DDE1E8; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, var(--control-off); }
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: var(--control-off); }
 input[type="range"]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--accent); }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgb(27 33 48 / 0.15), 0 1px 3px rgb(27 33 48 / 0.25); }
 input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgb(27 33 48 / 0.15), 0 1px 3px rgb(27 33 48 / 0.25); }
@@ -224,9 +234,9 @@ input[type="range"]:disabled { opacity: .4; }
 .call[open] > summary svg.i { rotate: 90deg; }
 .call > summary .meta { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12px; }
 .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 600; }
-.tag.in { background: #EAF0FD; color: var(--video); }
-.tag.out { background: #E6F5F1; color: var(--text); }
-.tag.err { background: #FCEBEA; color: var(--bad); }
+.tag.in { background: #EAF0FD; color: var(--info-ink); }
+.tag.out { background: #E6F5F1; color: var(--ok-ink); }
+.tag.err { background: #FCEBEA; color: var(--bad-ink); }
 .block { margin-top: 12px; display: grid; gap: 8px; }
 .block-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
@@ -247,7 +257,7 @@ details.sub > summary::-webkit-details-marker { display: none; }
 .plan .spans { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
 .plan.issue { background: #FCEBEA; }
 .verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
-.verdict.yes { color: var(--ok); } .verdict.no { color: var(--bad); }
+.verdict.yes { color: var(--ok-ink); } .verdict.no { color: var(--bad); }
 .none { color: var(--muted); padding: 24px 0; }
 
 @media (max-width: 1100px) {
@@ -258,7 +268,11 @@ details.sub > summary::-webkit-details-marker { display: none; }
   .app { padding: 12px; }
   .top { flex-wrap: wrap; height: auto; padding: 10px 12px; }
   .project { min-width: 0; flex: 1; }
-  .thead { display: none; }
+  .thead { display: block; height: 30px; padding: 0 12px; }
+  .thead > div:first-child, .ctl-head { display: none; }
+  .vol { min-width: 0; }
+  .vol input[type="range"] { width: 100%; min-width: 0; }
+  .mtip { right: auto; left: 8px; top: calc(100% + 4px); translate: none; white-space: normal; width: max-content; max-width: 200px; z-index: 1; }
   .row { grid-template-columns: 1fr; row-gap: 6px; padding: 10px 0; }
   .who { padding: 0 12px; }
   .wave { margin: 0 12px; }
@@ -311,9 +325,9 @@ details.sub > summary::-webkit-details-marker { display: none; }
     <div class="panel-head">
       <h2>파이프라인</h2>
       <span class="legend" aria-hidden="true">
-        <span><i style="background:var(--video)"></i>영상</span>
-        <span><i style="background:var(--audio)"></i>오디오</span>
-        <span><i style="background:var(--text)"></i>텍스트</span>
+        <span><svg class="key"><line class="edge done video" x1="1" y1="4" x2="21" y2="4"/></svg>영상</span>
+        <span><svg class="key"><line class="edge done audio" x1="1" y1="4" x2="21" y2="4"/></svg>오디오</span>
+        <span><svg class="key"><line class="edge done text" x1="1" y1="4" x2="21" y2="4"/></svg>텍스트</span>
       </span>
       <span class="meta" id="servers-meta"></span>
     </div>
@@ -400,15 +414,14 @@ async function api(path, options = {}) {
   return response.json();
 }
 const command = (body) => api(`/api/jobs/${S.job.id}/commands`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-let toastTimer;
-function toast(message) {
+// Errors stay until dismissed; the server's own message is kept below as detail.
+function toast(message, error) {
   document.querySelector(".toast")?.remove();
   if (!message) return;
-  const close = el("button", { class: "ibtn", "aria-label": "닫기", onclick: () => box.remove() }, icon("close"));
-  const box = el("div", { class: "toast", role: "alert" }, el("span", {}, message), close);
+  const close = el("button", { class: "ibtn", "aria-label": "알림 닫기", onclick: () => box.remove() }, icon("close"));
+  const detail = error?.message && error.message !== "Failed to fetch" ? error.message : "서버에 연결하지 못했습니다.";
+  const box = el("div", { class: "toast", role: "alert" }, el("div", {}, el("div", {}, message), error ? el("small", {}, detail) : null), close);
   document.body.append(box);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => box.remove(), 8000);
 }
 
 /* ---------- audio engine: video for picture, Web Audio for the mix ---------- */
@@ -490,7 +503,7 @@ $("play").addEventListener("click", () => (A.playing ? pause() : play()));
 video.addEventListener("click", () => (A.playing ? pause() : play()));
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !e.target.closest("input, select, textarea, button, [role=button], .drawer")) { e.preventDefault(); A.playing ? pause() : play(); }
-  if (e.key === "Escape") { closeDrawer(); closeMenu(); }
+  if (e.key === "Escape") { if (menuEl) closeMenu(true); else closeDrawer(); }
 });
 
 /* Tracks the editor plays: sources with audio, plus what separation left over. */
@@ -544,7 +557,10 @@ async function syncTracks() {
 }
 
 /* ---------- transport + editor ---------- */
-function drawClock() { $("clock").replaceChildren(clock(now()), el("span", {}, ` / ${clock(duration())}`)); }
+function drawClock() {
+  $("clock").replaceChildren(clock(now()), el("span", {}, ` / ${clock(duration())}`));
+  scrub.value = now(); scrub.setAttribute("aria-valuetext", clock(now()));
+}
 function drawTransport() {
   const play = $("play");
   play.disabled = !S.job;
@@ -552,15 +568,17 @@ function drawTransport() {
   play.setAttribute("aria-label", A.playing ? "일시정지" : "재생");
   drawClock();
 }
+const scrub = el("input", { class: "scrub", type: "range", min: 0, step: 0.1, value: 0, "aria-label": "재생 위치", oninput: (e) => seek(Number(e.target.value)) });
 function drawRuler() {
   const d = duration(), box = $("ruler");
-  if (!d) { box.replaceChildren(); return; }
+  scrub.max = d || 0; scrub.disabled = !d;
+  if (!d) { box.replaceChildren(scrub); return; }
   const ticks = 5;
   box.replaceChildren(...Array.from({ length: ticks }, (_, i) => {
     const t = (d * i) / (ticks - 1);
     const left = (i / (ticks - 1)) * 100;
     return el("span", { style: `left:${left}%;${i === ticks - 1 ? "translate:-100% -50%" : i ? "translate:-50% -50%" : ""}` }, `${t.toFixed(1)}s`);
-  }));
+  }), scrub);
 }
 
 function drawRows() {
@@ -609,7 +627,7 @@ function trackRow(t, index, locked) {
   return el("div", { class: `grid row${t.keep ? "" : " off"}${pair}` },
     el("div", { class: "who" },
       el("span", { class: "chip", style: `background:${tint};color:${t.color}` }, icon(kindIcon)),
-      el("div", { style: "min-width:0" }, el("b", { title: t.name }, t.name), el("small", {}, meta))),
+      el("div", { style: "min-width:0" }, el("b", {}, t.name), el("small", {}, meta))),
     wave,
     el("div", { class: "ctl" }, el("span", {}, sw), el("span", { class: "vol" }, range, out), pitch, more));
 }
@@ -642,12 +660,23 @@ function openMenu(anchor, actions) {
   menuEl.style.left = `${Math.min(window.innerWidth - w - 8, r.right - w)}px`;
   menuEl.style.top = `${r.bottom + h + 8 > window.innerHeight ? r.top - h - 4 : r.bottom + 4}px`;
   menuEl.anchor = anchor;
+  menuEl.addEventListener("keydown", menuKeys);
   menuEl.querySelector("button").focus();
 }
 document.addEventListener("click", (e) => {
   if (menuEl && !menuEl.contains(e.target) && !menuEl.anchor.contains(e.target)) closeMenu();
 });
-function closeMenu() { menuEl?.remove(); menuEl = null; }
+function closeMenu(refocus = false) {
+  const anchor = menuEl?.anchor;
+  menuEl?.remove(); menuEl = null;
+  if (refocus && anchor?.isConnected) anchor.focus();
+}
+function menuKeys(e) {
+  const items = [...menuEl.querySelectorAll("button")], i = items.indexOf(document.activeElement);
+  const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (to !== undefined) { e.preventDefault(); items[(to + items.length) % items.length].focus(); }
+  if (e.key === "Tab") { e.preventDefault(); closeMenu(true); }
+}
 
 function seekFromWave(e) {
   const r = e.currentTarget.getBoundingClientRect();
@@ -729,7 +758,7 @@ async function send(cmds, rowId, rerender = false) {
     for (const cmd of [cmds].flat()) S.job = await command(cmd);
     // Pitch needs the server render; long commands also re-render so export stays current.
     if (rerender) S.job = await command({ type: "render" });
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast("변경을 적용하지 못했습니다. 다시 시도하세요.", e); }
   finally {
     S.busy = null;
     drawAll();
@@ -743,7 +772,7 @@ $("export").addEventListener("click", async () => {
     S.job = await command({ type: "render" });
     const a = el("a", { href: `/api/jobs/${S.job.id}/export`, download: "" });
     document.body.append(a); a.click(); a.remove();
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast("내보내지 못했습니다. 다시 시도하세요.", e); }
   finally { S.busy = null; drawAll(); }
 });
 
@@ -796,7 +825,7 @@ function drawBoard() {
   const idle = (step) => (["generate", "score"].includes(step) && !generating) || (["separate", "judge", "residual"].includes(step) && !!job?.silent);
   const lanes = (S.lanes.length ? S.lanes : LANES).filter((l) => l.steps.some((s) => s in COL));
   const row = (step) => Math.max(0, lanes.findIndex((l) => l.steps.includes(step)));
-  const labelW = 150, colW = 132, nodeW = 96, nodeH = 46, laneH = 62, left = labelW + 18, gap = 4, r = 8;
+  const labelW = 150, colW = 124, nodeW = 96, nodeH = 46, laneH = 62, left = labelW + 18, gap = 4, r = 8;
   const pos = (step) => ({ x: left + COL[step] * colW, y: row(step) * laneH + (laneH - nodeH) / 2 });
   const width = left + 6 * colW + nodeW + 14, height = lanes.length * laneH;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -880,18 +909,22 @@ function openDrawer(step) {
   S.selected = step; lastFocus = document.activeElement;
   const d = $("drawer"), s = $("scrim");
   d.hidden = false; s.hidden = false;
+  for (const e of document.querySelectorAll(".top, .app")) e.inert = true;
   requestAnimationFrame(() => { d.classList.add("open"); s.classList.add("open"); });
   drawDrawer(); drawBoard();
   $("drawer-close").focus();
 }
 function closeDrawer() {
   if (!S.selected) return;
+  const step = S.selected;
   S.selected = null;
+  for (const e of document.querySelectorAll(".top, .app")) e.inert = false;
   const d = $("drawer"), s = $("scrim");
   d.classList.remove("open"); s.classList.remove("open");
   setTimeout(() => { if (!S.selected) { d.hidden = true; s.hidden = true; } }, 260);
   drawBoard();
-  lastFocus?.focus?.();
+  // The board redraws its nodes, so find the step again rather than the stale element.
+  (lastFocus?.isConnected ? lastFocus : document.querySelector(`.node[data-step="${step}"]`))?.focus();
 }
 $("drawer-close").addEventListener("click", closeDrawer);
 $("scrim").addEventListener("click", closeDrawer);
@@ -1047,7 +1080,7 @@ async function loadJobs(select) {
 }
 $("jobs").addEventListener("change", async (e) => {
   if (!e.target.value) { S.events?.close(); pause(); S.job = null; video.removeAttribute("src"); A.tracks.clear(); drawAll(); return; }
-  try { follow(await api(`/api/jobs/${e.target.value}`)); } catch (err) { toast(err.message); }
+  try { follow(await api(`/api/jobs/${e.target.value}`)); } catch (err) { toast("프로젝트를 열지 못했습니다. 목록에서 다시 고르세요.", err); }
 });
 
 async function upload(file) {
@@ -1060,7 +1093,7 @@ async function upload(file) {
     S.busy = null;
     await loadJobs(job.id);
     follow(job);
-  } catch (err) { S.busy = null; drawStatus(); toast(err.message); }
+  } catch (err) { S.busy = null; drawStatus(); toast("영상을 올리지 못했습니다. 파일을 확인하고 다시 올리세요.", err); }
 }
 $("file").addEventListener("change", (e) => { upload(e.target.files[0]); e.target.value = ""; });
 $("upload-btn").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
@@ -1079,7 +1112,7 @@ async function loadSystem() { try { S.lanes = await api("/api/system"); drawBoar
   try {
     const jobs = await loadJobs();
     if (jobs[0]) { $("jobs").value = jobs[0].id; $("jobs").dispatchEvent(new Event("change")); }
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast("프로젝트 목록을 불러오지 못했습니다. 새로고침하세요.", e); }
   setInterval(loadSystem, 15000);
 })();
 </script>
