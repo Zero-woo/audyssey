@@ -114,7 +114,7 @@ services:
       - --gpu-memory-utilization
       - ${AUDYSSEY_VLLM_GPU_UTIL:-0.85}
       - --max-model-len
-      - "32768"
+      - "16384"
       # Lets the planner set fps per request (AUDYSSEY_PLANNER_INPUT=video).
       - --trust-request-mm-kwargs
     # The official image runs as root by default; run unprivileged with a writable home.
