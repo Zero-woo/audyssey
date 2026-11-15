@@ -135,6 +135,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .hit:focus-visible { stroke: var(--accent); stroke-opacity: .22; }
 .link.selected .edge { stroke-width: 3; opacity: 1; }
 @media (hover: hover) { .link:hover .edge { stroke-width: 3; opacity: 1; } }
+.flow .elabel.on { fill: var(--ink); }
 .flow .elabel { pointer-events: none; font-size: 12px; font-weight: 600; fill: var(--muted); paint-order: stroke; stroke: var(--sunken); stroke-width: 4px; stroke-linejoin: round; }
 .lane .band { fill: var(--sunken); }
 .lane.busy .band { fill: var(--accent-soft); }
@@ -827,6 +828,7 @@ const LINKS = [
   ["validate_plan", "generate", "text"], ["generate", "score", "audio", null, "오디오"], ["score", "generate", "text", "loop"],
   ["score", "render", "audio"],
 ];
+const LOOP_TARGETS = new Set(["plan", "separate", "generate"]);
 const DATA = { video: "영상", audio: "오디오", text: "텍스트" };
 const CARRIES = {
   "preprocess>plan": { step: "plan", keys: ["video", "audio", "duration"] },
@@ -864,7 +866,10 @@ function drawBoard() {
   const row = (step) => Math.max(0, lanes.findIndex((l) => l.steps.includes(step)));
   const labelW = 150, colW = 124, nodeW = 96, nodeH = 46, laneH = 62, left = labelW + 18, gap = 4, r = 8;
   const pos = (step) => ({ x: left + COL[step] * colW, y: row(step) * laneH + (laneH - nodeH) / 2 });
-  const width = left + 6 * colW + nodeW + 14, height = lanes.length * laneH;
+  const st = Object.fromEntries(Object.keys(COL).map((s) => [s, nodeState(s)]));
+  // A shown same-row loop on the bottom lane curves under it; make room for it.
+  const lowLoop = LINKS.some(([from, to, , loop]) => loop && row(from) === row(to) && row(to) === lanes.length - 1 && !idle(to) && st[to].steps.some((s) => (s.round || 1) > 1));
+  const width = left + 6 * colW + nodeW + 14, height = lanes.length * laneH + (lowLoop ? 26 : 0);
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   const ns = "http://www.w3.org/2000/svg";
   const make = (tag, attrs, text) => { const n = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text !== undefined) n.textContent = text; return n; };
@@ -876,7 +881,6 @@ function drawBoard() {
     defs.append(m);
   }
   svg.append(defs);
-  const st = Object.fromEntries(Object.keys(COL).map((s) => [s, nodeState(s)]));
 
   // Server lanes: one row per server, its steps sit on it.
   lanes.forEach((lane, i) => {
@@ -908,12 +912,16 @@ function drawBoard() {
   for (const [from, to, kind, loop, label] of LINKS) {
     if (idle(from) || idle(to)) continue;
     const sTo = st[to].status, sFrom = st[from].status;
+    // A retry (round 2+) of plan, separate or generate is fed by its loop edge, so only that edge flows;
+    // a first run is fed by the forward edges. Loop edges appear once a retry has happened.
+    const runs = st[to].steps.filter((s) => s.status === "running");
+    const retrying = runs.some((s) => (s.round || 1) > 1), fresh = runs.some((s) => (s.round || 1) <= 1);
+    const looped = LOOP_TARGETS.has(to);
     let state = "";
     if (loop) {
-      const looped = st[to].steps.some((s) => s.round > 1) || (to === "plan" && (job?.plan_issues || []).length);
-      if (!looped) continue;
-      state = sTo === "running" ? "active" : "done";
-    } else if (sTo === "running" && sFrom !== "pending") state = "active";
+      if (!st[to].steps.some((s) => (s.round || 1) > 1)) continue;
+      state = retrying ? "active" : "done";
+    } else if (sFrom !== "pending" && (looped ? fresh : runs.length)) state = "active";
     else if (sFrom !== "pending" && sTo !== "pending") state = "done";
     const d = route(from, to, loop);
     const key = `edge:${from}>${to}`;
@@ -925,7 +933,12 @@ function drawBoard() {
     link.append(make("path", { class: "hit", d, tabindex: 0, role: "button", "aria-haspopup": "dialog", "aria-expanded": String(S.edge === key), "data-key": key, "aria-label": `${STEPS[from].label}에서 ${STEPS[to].label}로 보낸 ${DATA[kind]} 보기` }));
     svg.append(link);
     // Name the data where its type changes, above the segment entering the next step.
-    if (label && !written.has(label)) {
+    if (loop) {
+      // Loops say what they are: a request to do the step again.
+      const a = pos(from), b = pos(to), below = a.y === b.y;
+      const x = below ? (a.x + b.x + nodeW) / 2 : (a.x + nodeW / 2 + b.x + nodeW) / 2;
+      svg.append(make("text", { class: `elabel loop${state === "active" ? " on" : ""}`, x, y: below ? a.y + nodeH + 26 : b.y + nodeH / 2 - 7, "text-anchor": "middle" }, "재시도"));
+    } else if (label && !written.has(label)) {
       written.add(label);
       const a = pos(from), b = pos(to), x = a.y === b.y ? (a.x + nodeW + b.x) / 2 : (a.x + nodeW / 2 + b.x) / 2;
       svg.append(make("text", { class: "elabel", x, y: b.y + nodeH / 2 + (ENTRY[`${from}>${to}`] || 0) - 7, "text-anchor": "middle" }, label));
