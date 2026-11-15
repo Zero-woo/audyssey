@@ -628,10 +628,14 @@ def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
             if issues:
                 raise ValueError("; ".join(i.message for i in issues))
             target_source.plan = plan
-            if source.origin == "separated":
-                if target_source not in job.sources:
-                    job.sources.append(target_source)
-                source.keep = False
+            if target_source not in job.sources:
+                job.sources.append(target_source)
+            if target_source.replaces:
+                # The separated stem stays for comparison; the new generation plays.
+                original = job.find_source(target_source.replaces)
+                if original is not None:
+                    original.keep = False
+                target_source.keep = True
             generate_source(job, target_source, ctx)
         elif isinstance(cmd, (Keep, Drop)):
             target.keep = isinstance(cmd, Keep)

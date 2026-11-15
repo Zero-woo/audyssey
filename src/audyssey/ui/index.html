@@ -74,7 +74,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .toast .ibtn { color: #C9CDD8; }
 
 /* layout */
-.app { display: grid; grid-template-columns: minmax(360px, 5fr) 7fr; grid-template-rows: auto 1fr; gap: 16px; padding: 16px 20px 20px; min-height: calc(100vh - 56px); }
+.app { display: grid; grid-template-columns: minmax(320px, 1fr) 2fr; grid-template-rows: auto 1fr; gap: 16px; padding: 16px 20px 20px; min-height: calc(100vh - 56px); }
 .panel { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); min-width: 0; }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0 16px; height: 44px; }
 .panel-head h2 { font-size: 13px; font-weight: 600; margin: 0; }
@@ -92,19 +92,20 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 
 /* pipeline */
 .pipeline { display: flex; flex-direction: column; min-height: 0; }
-.flow-wrap { padding: 2px 12px 0; overflow-x: auto; }
-svg.flow { display: block; width: 100%; height: auto; min-width: 680px; }
-.edge { fill: none; stroke-width: 2; stroke-linecap: round; opacity: .25; }
-.edge.done { opacity: .9; }
-.edge.active { opacity: 1; stroke-dasharray: 6 6; }
-@media (prefers-reduced-motion: no-preference) { .edge.active { animation: flow .7s linear infinite; } }
-.edge.video { stroke: var(--video); } .edge.audio { stroke: var(--audio); } .edge.text { stroke: var(--text); }
+.flow-wrap { padding: 4px 12px 12px; overflow-x: auto; }
+svg.flow { display: block; width: 100%; height: auto; min-width: 820px; }
+.edge { fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; opacity: .3; }
+.edge.done { opacity: .85; }
+.edge.active { opacity: .45; }
+.pulse { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 0.1 11; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) { .pulse { animation: flow .6s linear infinite; } }
+.edge.video, .pulse.video { stroke: var(--video); } .edge.audio, .pulse.audio { stroke: var(--audio); } .edge.text, .pulse.text { stroke: var(--text); }
 .tip.video { fill: var(--video); } .tip.audio { fill: var(--audio); } .tip.text { fill: var(--text); }
-@keyframes flow { to { stroke-dashoffset: -12; } }
+@keyframes flow { to { stroke-dashoffset: -11.1; } }
 .node { cursor: pointer; outline: none; }
 .node .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.25; transition-property: fill, stroke; transition-duration: 150ms; }
-.node .label { font-size: 13px; font-weight: 600; fill: var(--ink); }
-.node .model { font-size: 11px; fill: var(--muted); }
+.node .label { font-size: 14px; font-weight: 600; fill: var(--ink); }
+.node .model { font-size: 11.5px; fill: var(--muted); }
 .node .count { font-size: 11px; font-weight: 600; fill: var(--muted); }
 .node text { pointer-events: none; }
 .node.done .box { stroke: #B9C0CC; }
@@ -124,13 +125,12 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 680px; }
 .legend { display: inline-flex; gap: 12px; color: var(--muted); font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i { width: 14px; height: 2.5px; border-radius: 2px; }
-.servers { list-style: none; margin: 0; padding: 8px 14px 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
-.server .dot.unknown { background: none; box-shadow: inset 0 0 0 1.5px var(--faint); }
-.server { display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 8px; align-items: center; padding: 7px 10px; border-radius: 8px; background: var(--sunken); }
-.server .dot { grid-row: span 2; }
-.server b { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
-.server span { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-.server .down { color: var(--bad); font-weight: 600; }
+.lane .band { fill: var(--sunken); }
+.lane.busy .band { fill: var(--accent-soft); }
+.lane .lname { font-size: 13px; font-weight: 600; fill: var(--ink); }
+.lane .lmodel { font-size: 11.5px; fill: var(--muted); }
+.lane .lmodel.down { fill: var(--bad); font-weight: 600; }
+.ldot.ok { fill: var(--ok); } .ldot.bad { fill: var(--bad); } .ldot.unknown { fill: none; stroke: var(--faint); stroke-width: 1.5; }
 
 /* editor */
 .editor { grid-column: 1 / -1; display: flex; flex-direction: column; align-self: start; }
@@ -155,6 +155,12 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 680px; }
 .rows { position: relative; }
 .row { min-height: 62px; align-items: center; box-shadow: 0 1px 0 var(--line); }
 .row:last-child { box-shadow: none; }
+/* A generated replacement under the stem it replaces: one bracket, no divider between them. */
+.row.pair-a, .row.pair-b { position: relative; }
+.row.pair-a { box-shadow: none; }
+.row.pair-a::before, .row.pair-b::before { content: ""; position: absolute; left: 6px; width: 2px; border-radius: 2px; background: var(--faint); }
+.row.pair-a::before { top: 31px; bottom: 0; }
+.row.pair-b::before { top: 0; height: 31px; }
 .who { display: flex; align-items: center; gap: 10px; padding: 0 0 0 14px; min-width: 0; }
 .chip { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; }
 .chip svg.i { width: 15px; height: 15px; }
@@ -193,7 +199,11 @@ input[type="range"]:disabled { opacity: .4; }
 @keyframes rot { to { rotate: 360deg; } }
 .menu { position: fixed; z-index: 20; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 4px; min-width: 180px; }
 .menu button { display: flex; width: 100%; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; background: none; border-radius: 6px; text-align: left; }
-@media (hover: hover) { .menu button:hover { background: var(--sunken); } }
+@media (hover: hover) { .menu button:not([aria-disabled]):hover { background: var(--sunken); } }
+.menu button[aria-disabled="true"] { color: var(--faint); cursor: not-allowed; position: relative; }
+.mtip { position: absolute; right: calc(100% + 10px); top: 50%; translate: 0 -50%; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; padding: 6px 10px; border-radius: 7px; white-space: nowrap; opacity: 0; pointer-events: none; transition-property: opacity; transition-duration: 150ms; }
+.menu button[aria-disabled="true"]:focus-visible .mtip, .menu button.tell .mtip { opacity: 1; }
+@media (hover: hover) { .menu button[aria-disabled="true"]:hover .mtip { opacity: 1; } }
 .empty-row { padding: 28px 18px; color: var(--muted); }
 
 /* inspector drawer */
@@ -308,7 +318,6 @@ details.sub > summary::-webkit-details-marker { display: none; }
       <span class="meta" id="servers-meta"></span>
     </div>
     <div class="flow-wrap"><svg class="flow" id="board" role="group" aria-label="처리 단계"></svg></div>
-    <ul class="servers" id="servers" aria-label="서버"></ul>
   </section>
 
   <section class="panel editor" aria-label="트랙">
@@ -499,6 +508,13 @@ function trackList() {
       source: s,
     };
   });
+  for (const t of [...list]) {
+    const of = t.source.replaces && list.find((o) => o.id === t.source.replaces);
+    if (!of) continue;
+    list.splice(list.indexOf(t), 1);
+    list.splice(list.indexOf(of) + 1, 0, t);
+    t.pair = of.id; of.pair = t.id; t.color = of.color;
+  }
   if (job.residual.path) list.push({ id: "residual", name: "나머지 소리", kind: "residual", origin: "residual", status: "done", keep: job.residual.keep, gain: job.residual.gain, pitch: null, color: "#9AA1AE", path: job.residual.path, key: `${job.residual.path}|${job.sources.map((s) => s.attempts).join(",")}` });
   return list;
 }
@@ -589,7 +605,8 @@ function trackRow(t, index, locked) {
   const actions = rowActions(t);
   const more = actions.length ? el("button", { class: "ibtn", "aria-label": `${t.name} 작업`, "aria-haspopup": "menu", disabled: locked, onclick: (e) => openMenu(e.currentTarget, actions) }, busy && t.pitch === null ? el("span", { class: "spin" }) : icon("more")) : el("span");
 
-  return el("div", { class: `grid row${t.keep ? "" : " off"}` },
+  const pair = t.pair ? (t.source.replaces ? " pair-b" : " pair-a") : "";
+  return el("div", { class: `grid row${t.keep ? "" : " off"}${pair}` },
     el("div", { class: "who" },
       el("span", { class: "chip", style: `background:${tint};color:${t.color}` }, icon(kindIcon)),
       el("div", { style: "min-width:0" }, el("b", { title: t.name }, t.name), el("small", {}, meta))),
@@ -600,15 +617,14 @@ function trackRow(t, index, locked) {
 function rowActions(t) {
   const s = t.source;
   if (!s || s.status === "skipped") return [];
+  // A generated replacement and its separated stem share both actions; the server regenerates the existing replacement.
+  const original = s.replaces || (s.origin === "separated" ? s.id : null);
+  const replaced = !!t.pair;
   const list = [];
-  if (s.origin === "separated") list.push(["redo", "다시 분리", { type: "reseparate", source_id: s.id }]);
-  if (s.origin === "generated") list.push(["redo", "다시 생성", { type: "generate", source_id: s.id }]);
-  if (s.origin === "separated" && s.plan.kind !== "dialogue") {
-    // The server regenerates the existing replacement when there is one.
-    const replaced = S.job.sources.some((o) => o.replaces === s.id);
-    list.push(["spark", replaced ? "다시 생성" : "생성으로 바꾸기", { type: "generate", source_id: s.id }]);
-  }
-  return list.map(([ic, label, cmd]) => ({ ic, label, run: () => send(cmd, t.id, true) }));
+  if (original) list.push({ ic: "redo", label: "다시 분리", cmd: { type: "reseparate", source_id: original } });
+  if (s.plan.kind === "dialogue") list.push({ ic: "spark", label: "생성으로 바꾸기", off: "대사는 생성을 지원하지 않습니다" });
+  else list.push({ ic: "spark", label: s.origin === "generated" || replaced ? "다시 생성" : "생성으로 바꾸기", cmd: { type: "generate", source_id: s.id } });
+  return list.map((a) => ({ ...a, run: a.cmd && (() => send([a.cmd], t.id, true)) }));
 }
 
 let menuEl = null;
@@ -617,7 +633,10 @@ function openMenu(anchor, actions) {
   closeMenu();
   if (reopen) return;
   const r = anchor.getBoundingClientRect();
-  menuEl = el("div", { class: "menu", role: "menu" }, actions.map((a) => el("button", { role: "menuitem", onclick: () => { closeMenu(); a.run(); } }, icon(a.ic), a.label)));
+  menuEl = el("div", { class: "menu", role: "menu" }, actions.map((a, i) => a.off
+    ? el("button", { role: "menuitem", "aria-disabled": "true", "aria-describedby": `mtip-${i}`, onclick: (e) => e.currentTarget.classList.add("tell") },
+        icon(a.ic), a.label, el("span", { class: "mtip", role: "tooltip", id: `mtip-${i}` }, a.off))
+    : el("button", { role: "menuitem", onclick: () => { closeMenu(); a.run(); } }, icon(a.ic), a.label)));
   document.body.append(menuEl);
   const w = menuEl.offsetWidth, h = menuEl.offsetHeight;
   menuEl.style.left = `${Math.min(window.innerWidth - w - 8, r.right - w)}px`;
@@ -691,17 +710,23 @@ function peaks(buffer, count) {
 new ResizeObserver(() => { drawWaves(); drawPlayhead(); }).observe($("rows"));
 
 /* ---------- edits ---------- */
+// Within a separated/generated pair only one plays, so the switch flips between them for comparison.
 function setKeep(t, keep) {
-  const entry = A.tracks.get(t.id);
-  if (entry) entry.gain.gain.value = keep ? t.gain : 0;
-  send({ type: keep ? "keep" : "drop", source_id: t.id }, null);
+  const cmds = [{ type: keep ? "keep" : "drop", source_id: t.id }];
+  const other = keep && t.pair && trackList().find((o) => o.id === t.pair);
+  if (other?.keep) cmds.push({ type: "drop", source_id: other.id });
+  for (const c of cmds) {
+    const entry = A.tracks.get(c.source_id), row = c.source_id === t.id ? t : other;
+    if (entry) entry.gain.gain.value = c.type === "keep" ? row.gain : 0;
+  }
+  send(cmds, null);
 }
-async function send(cmd, rowId, rerender = false) {
+async function send(cmds, rowId, rerender = false) {
   if (S.busy) return;
   S.busy = rowId || "edit";
   drawRows(); drawStatus();
   try {
-    S.job = await command(cmd);
+    for (const cmd of [cmds].flat()) S.job = await command(cmd);
     // Pitch needs the server render; long commands also re-render so export stays current.
     if (rerender) S.job = await command({ type: "render" });
   } catch (e) { toast(e.message); }
@@ -735,17 +760,26 @@ function nodeSub(step, info) {
   if (["separate", "judge", "generate", "score"].includes(step)) return `${info.steps.filter((s) => s.status !== "running").length}/${info.steps.length}`;
   return "";
 }
-// Left-to-right flow; separation and generation are the two ways a source gets audio.
-const FLOW = { preprocess: [0, 0], plan: [1, 0], validate_plan: [2, 0], separate: [3, 0], judge: [4, 0], residual: [5, 0], render: [6, 0], generate: [3, 1], score: [4, 1] };
+// Columns run left to right; each step sits on the lane of the server that runs it.
+const COL = { preprocess: 0, plan: 1, validate_plan: 2, separate: 3, generate: 3, judge: 4, score: 4, residual: 5, render: 6 };
+// Used until /api/system answers: the default deployment's lanes.
+const LANES = [
+  { id: "app", name: "App server", models: [], steps: ["preprocess", "residual", "render"], up: null },
+  { id: "planner", name: "Planner", models: [], steps: ["plan"], up: null },
+  { id: "validator", name: "Validator", models: [], steps: ["validate_plan"], up: null },
+  { id: "separation", name: "Tool server (separation:8700)", models: [], steps: ["separate"], up: null },
+  { id: "judge", name: "Tool server (judge:8700)", models: [], steps: ["judge"], up: null },
+  { id: "generation", name: "Tool server (generation:8700)", models: [], steps: ["generate", "score"], up: null },
+];
 const LINKS = [
   ["preprocess", "plan", "video"], ["plan", "validate_plan", "text"], ["validate_plan", "plan", "text", "loop"],
   ["validate_plan", "separate", "text"], ["separate", "judge", "audio"], ["judge", "separate", "text", "loop"],
   ["judge", "residual", "audio"], ["residual", "render", "audio"],
-  ["validate_plan", "generate", "text", "down"], ["generate", "score", "audio"], ["score", "generate", "text", "loopBelow"],
-  ["score", "render", "audio", "up"],
+  ["validate_plan", "generate", "text"], ["generate", "score", "audio"], ["score", "generate", "text", "loop"],
+  ["score", "render", "audio"],
 ];
 const GLYPH = { done: "M-3 0l2 2 4-4", warning: "M0 -3.5v3.5M0 3h0", failed: "M-2.5 -2.5l5 5M2.5 -2.5l-5 5" };
-// Short enough for a step box; the server list keeps the exact IDs.
+// Short enough for a step box; the lane label keeps the exact IDs.
 const PRETTY = { "gemini-3.8-flash": "Gemini Flash", "Qwen3-VL-8B-Instruct": "Qwen3-VL 8B", "sam-audio-large-tv": "SAM Audio", "sam-audio-judge": "SAM Judge", "internal-model": "Internal" };
 function nodeModel(step) {
   const lane = S.lanes.find((l) => l.steps.includes(step));
@@ -754,14 +788,17 @@ function nodeModel(step) {
   const id = (lane.models[0] || laneName(lane.name)).split("/").pop();
   return PRETTY[id] || id;
 }
+const serverName = (lane) => laneName(lane.name).replace(/^vLLM \(.+\)$/, "vLLM").replace(/ \((.+):\d+\)$/, " $1");
 function drawBoard() {
   const svg = $("board");
   const job = S.job;
   const generating = job ? job.silent || job.sources.some((s) => s.origin === "generated") : false;
   const idle = (step) => (["generate", "score"].includes(step) && !generating) || (["separate", "judge", "residual"].includes(step) && !!job?.silent);
-  const colW = 110, nodeW = 98, nodeH = 52, rowGap = 84, top = 30;
-  const pos = (step) => ({ x: 6 + FLOW[step][0] * colW, y: top + FLOW[step][1] * rowGap });
-  const width = 6 + 6 * colW + nodeW + 6, height = top + rowGap + nodeH + 30;
+  const lanes = (S.lanes.length ? S.lanes : LANES).filter((l) => l.steps.some((s) => s in COL));
+  const row = (step) => Math.max(0, lanes.findIndex((l) => l.steps.includes(step)));
+  const labelW = 150, colW = 132, nodeW = 96, nodeH = 46, laneH = 62, left = labelW + 18, gap = 4, r = 8;
+  const pos = (step) => ({ x: left + COL[step] * colW, y: row(step) * laneH + (laneH - nodeH) / 2 });
+  const width = left + 6 * colW + nodeW + 14, height = lanes.length * laneH;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   const ns = "http://www.w3.org/2000/svg";
   const make = (tag, attrs, text) => { const n = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text !== undefined) n.textContent = text; return n; };
@@ -773,59 +810,65 @@ function drawBoard() {
     defs.append(m);
   }
   svg.append(defs);
-  const st = Object.fromEntries(Object.keys(FLOW).map((s) => [s, nodeState(s)]));
-  for (const [from, to, kind, shape] of LINKS) {
+  const st = Object.fromEntries(Object.keys(COL).map((s) => [s, nodeState(s)]));
+
+  // Server lanes: one row per server, its steps sit on it.
+  lanes.forEach((lane, i) => {
+    const y = i * laneH, busy = lane.steps.some((s) => st[s]?.status === "running");
+    const state = lane.up === true ? "ok" : lane.up === false ? "bad" : "unknown";
+    const g = make("g", { class: `lane${busy ? " busy" : ""}` });
+    g.append(make("rect", { class: "band", x: 0, y: y + 2, width, height: laneH - 4, rx: 10 }));
+    g.append(make("circle", { class: `ldot ${state}`, cx: 14, cy: y + laneH / 2 - 7, r: 3.5 }));
+    g.append(make("text", { class: "lname", x: 24, y: y + laneH / 2 - 3 }, shorten(serverName(lane), 19)));
+    const what = lane.up === false ? "응답 없음" : lane.id === "app" ? "ffmpeg" : (lane.models[0] || "").split("/").pop();
+    g.append(make("text", { class: `lmodel${lane.up === false ? " down" : ""}`, x: 24, y: y + laneH / 2 + 13 }, shorten(what, 22)));
+    g.append(make("title", {}, `${serverName(lane)}: ${lane.models.join(", ") || "ffmpeg"}`));
+    svg.append(g);
+  });
+
+  // Orthogonal routes: forward edges step down then right, or right then up; loops go back the other way.
+  const route = (from, to, loop) => {
+    const a = pos(from), b = pos(to);
+    const acx = a.x + nodeW / 2, acy = a.y + nodeH / 2, bcx = b.x + nodeW / 2, bcy = b.y + nodeH / 2;
+    if (loop && a.y === b.y) return `M ${acx} ${a.y + nodeH + gap} C ${acx} ${a.y + nodeH + 16}, ${bcx} ${b.y + nodeH + 16}, ${bcx} ${b.y + nodeH + gap}`;
+    if (loop) return `M ${acx} ${a.y - gap} L ${acx} ${bcy + r} Q ${acx} ${bcy}, ${acx - r} ${bcy} L ${b.x + nodeW + gap} ${bcy}`;
+    if (a.y === b.y) return `M ${a.x + nodeW} ${acy} L ${b.x - gap} ${bcy}`;
+    if (b.y > a.y) return `M ${acx} ${a.y + nodeH} L ${acx} ${bcy - r} Q ${acx} ${bcy}, ${acx + r} ${bcy} L ${b.x - gap} ${bcy}`;
+    return `M ${a.x + nodeW} ${acy} L ${bcx - r} ${acy} Q ${bcx} ${acy}, ${bcx} ${acy - r} L ${bcx} ${b.y + nodeH + gap}`;
+  };
+  for (const [from, to, kind, loop] of LINKS) {
     if (idle(from) || idle(to)) continue;
-    const a = pos(from), b = pos(to), sTo = st[to].status, sFrom = st[from].status;
-    const loop = shape === "loop" || shape === "loopBelow";
-    let cls = `edge ${kind}`;
+    const sTo = st[to].status, sFrom = st[from].status;
+    let state = "";
     if (loop) {
       const looped = st[to].steps.some((s) => s.round > 1) || (to === "plan" && (job?.plan_issues || []).length);
       if (!looped) continue;
-      cls += sTo === "running" ? " active" : " done";
-    } else if (sTo === "running" && sFrom !== "pending") cls += " active";
-    else if (sFrom !== "pending" && sTo !== "pending") cls += " done";
-    const ay = a.y + nodeH / 2, by = b.y + nodeH / 2, gap = 4;
-    let d;
-    if (shape === "loop") { const ax = a.x + nodeW / 2, bx = b.x + nodeW / 2; d = `M ${ax} ${a.y - gap} C ${ax} ${a.y - 26}, ${bx} ${b.y - 26}, ${bx} ${b.y - gap}`; }
-    else if (shape === "loopBelow") { const ax = a.x + nodeW / 2, bx = b.x + nodeW / 2; d = `M ${ax} ${a.y + nodeH + gap} C ${ax} ${a.y + nodeH + 26}, ${bx} ${b.y + nodeH + 26}, ${bx} ${b.y + nodeH + gap}`; }
-    else if (shape === "down") d = `M ${a.x + nodeW} ${ay} C ${a.x + nodeW + 26} ${ay}, ${b.x - 26} ${by}, ${b.x - gap} ${by}`;
-    else if (shape === "up") { const cx = b.x + nodeW / 2; d = `M ${a.x + nodeW} ${ay} L ${cx - 12} ${ay} Q ${cx} ${ay}, ${cx} ${ay - 12} L ${cx} ${b.y + nodeH + gap}`; }
-    else d = `M ${a.x + nodeW} ${ay} L ${b.x - gap} ${by}`;
-    svg.append(make("path", { class: cls, d, "marker-end": `url(#tip-${kind})` }));
+      state = sTo === "running" ? "active" : "done";
+    } else if (sTo === "running" && sFrom !== "pending") state = "active";
+    else if (sFrom !== "pending" && sTo !== "pending") state = "done";
+    const d = route(from, to, loop);
+    svg.append(make("path", { class: `edge ${kind} ${state}`, d, "marker-end": `url(#tip-${kind})` }));
+    // Pulses travel along the edge feeding the running step.
+    if (state === "active") svg.append(make("path", { class: `pulse ${kind}`, d }));
   }
-  for (const step of Object.keys(FLOW)) {
+
+  for (const step of Object.keys(COL)) {
     const p = pos(step), info = st[step], count = nodeSub(step, info);
     const g = make("g", { class: `node ${info.status}${idle(step) ? " idle" : ""}${S.selected === step ? " selected" : ""}`, tabindex: 0, role: "button", "data-step": step, "aria-label": `${STEPS[step].label}, ${nodeModel(step)}, ${STATUS[info.status]}${count ? `, ${count}` : ""}` });
     g.append(make("rect", { class: "box", x: p.x, y: p.y, width: nodeW, height: nodeH, rx: 10 }));
-    g.append(make("text", { class: "label", x: p.x + 12, y: p.y + 21 }, STEPS[step].label));
-    g.append(make("text", { class: "model", x: p.x + 12, y: p.y + 39 }, shorten(nodeModel(step), 13)));
+    g.append(make("text", { class: "label", x: p.x + 11, y: p.y + 19 }, STEPS[step].label));
+    g.append(make("text", { class: "model", x: p.x + 11, y: p.y + 35 }, shorten(nodeModel(step), 13)));
     if (info.status !== "pending") {
-      const badge = make("g", { class: `badge ${info.status}`, transform: `translate(${p.x + nodeW - 15} ${p.y + 16})` });
+      const badge = make("g", { class: `badge ${info.status}`, transform: `translate(${p.x + nodeW - 14} ${p.y + 15})` });
       badge.append(make("circle", { r: 7 }));
       if (GLYPH[info.status]) badge.append(make("path", { d: GLYPH[info.status] }));
       g.append(badge);
     }
-    if (count) g.append(make("text", { class: "count", x: p.x + nodeW - (info.status === "pending" ? 10 : 27), y: p.y + 21, "text-anchor": "end" }, count));
+    if (count) g.append(make("text", { class: "count", x: p.x + nodeW - (info.status === "pending" ? 10 : 26), y: p.y + 19, "text-anchor": "end" }, count));
     svg.append(g);
   }
-  drawServers();
-}
-function drawServers() {
-  const list = $("servers");
   const known = S.lanes.filter((l) => l.up !== null);
-  const up = known.filter((l) => l.up).length;
-  $("servers-meta").textContent = S.lanes.length ? `서버 ${up}/${known.length} 응답` : "";
-  list.replaceChildren(...S.lanes.map((lane) => {
-    const state = lane.up === true ? "ok" : lane.up === false ? "bad" : "unknown";
-    const name = laneName(lane.name).replace(/^vLLM \(.+\)$/, "vLLM").replace(/ \((.+):\d+\)$/, " $1");
-    const what = lane.id === "app" ? "전처리, 잔여음, 합치기" : lane.models.map((m) => m.split("/").pop()).join(", ");
-    const said = lane.up === true ? "응답" : lane.up === false ? "응답 없음" : "상태 확인 안 됨";
-    return el("li", { class: "server", "aria-label": `${name}, ${what}, ${said}` },
-      el("span", { class: `dot ${state}`, "aria-hidden": "true" }),
-      el("b", {}, name),
-      lane.up === false ? el("span", { class: "down" }, "응답 없음") : el("span", {}, what));
-  }));
+  $("servers-meta").textContent = S.lanes.length ? `서버 ${known.filter((l) => l.up).length}/${known.length} 응답` : "";
 }
 const shorten = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 $("board").addEventListener("click", (e) => { const g = e.target.closest(".node"); if (g) openDrawer(g.dataset.step); });

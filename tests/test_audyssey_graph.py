@@ -494,6 +494,16 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(source.plan.description, "new sound")
         self.assertGreater(source.attempts, previous)
 
+    def test_regenerate_plays_replacement_after_switching_back(self):
+        from audyssey.contracts import Generate, Keep, Drop
+        job = graph.analyze(self.job, self.ctx)
+        graph.handle_command(job, Generate(source_id="s3"), self.ctx)
+        replacement = job.sources[-1]
+        graph.handle_command(job, Keep(source_id="s3"), self.ctx)
+        graph.handle_command(job, Drop(source_id=replacement.id), self.ctx)
+        graph.handle_command(job, Generate(source_id=replacement.id), self.ctx)
+        self.assertEqual((job.find_source("s3").keep, replacement.keep), (False, True))
+
     def test_generate_does_not_change_residual(self):
         from audyssey.contracts import Generate
         job = graph.analyze(self.job, self.ctx)
