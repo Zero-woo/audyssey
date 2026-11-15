@@ -165,7 +165,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .scrub { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .ruler:has(.scrub:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 .ruler span { position: absolute; pointer-events: none; top: 50%; translate: 0 -50%; font-size: 11.5px; color: var(--muted); }
-.ctl-head { display: grid; grid-template-columns: 52px 160px 104px 28px; gap: 0; padding-right: 14px; }
+.ctl-head { display: grid; grid-template-columns: 52px minmax(0, 1fr) 104px 28px; gap: 0; padding-right: 14px; }
 .rows { position: relative; }
 .row { min-height: 62px; align-items: center; box-shadow: 0 1px 0 var(--line); }
 .row:last-child { box-shadow: none; }
@@ -187,14 +187,16 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .row.off .who b { color: var(--muted); }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); pointer-events: none; translate: -1px 0; z-index: 1; }
 .playhead::before { content: ""; position: absolute; top: -5px; left: -4px; width: 10px; height: 10px; border-radius: 3px; background: var(--ink); rotate: 45deg; }
-.ctl { display: grid; grid-template-columns: 52px 160px 104px 28px; align-items: center; padding-right: 14px; }
+/* The volume column takes what is left, so the controls fit whatever width --ctl gives them. */
+.ctl { display: grid; grid-template-columns: 52px minmax(0, 1fr) 104px 28px; align-items: center; padding-right: 14px; }
 
 .switch { width: 34px; height: 20px; border-radius: 999px; border: 0; padding: 2px; background: var(--control-off); display: inline-flex; transition-property: background-color; transition-duration: 150ms; }
 .switch::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); transition-property: translate; transition-duration: 150ms; transition-timing-function: var(--ease); }
 .switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"]::after { translate: 14px 0; }
 .switch:disabled { opacity: .4; cursor: default; }
-.vol { display: flex; align-items: center; gap: 8px; }
+.vol { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.vol input[type="range"] { flex: 1; min-width: 0; max-width: 110px; }
 .vol output { width: 38px; text-align: right; font-size: 12px; color: var(--muted); }
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 110px; height: 20px; background: none; margin: 0; }
 input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, var(--control-off); }
@@ -291,23 +293,26 @@ details.sub > summary::-webkit-details-marker { display: none; }
 .verdict.yes { color: var(--ok-ink); } .verdict.no { color: var(--bad); }
 .none { color: var(--muted); padding: 24px 0; }
 
-@media (max-width: 1100px) {
+/* Two columns only while the pipeline drawing fits beside the preview without scrolling. */
+@media (max-width: 1360px) {
   .app { grid-template-columns: 1fr; }
+  .screen { min-height: 300px; }
+}
+@media (max-width: 1100px) {
   .grid { --name: 170px; --ctl: 300px; }
 }
 @media (max-width: 760px) {
   .app { padding: 12px; }
   .top { flex-wrap: wrap; height: auto; padding: 10px 12px; }
-  .project { min-width: 0; flex: 1; }
+  .project { min-width: 0; flex: 1 1 180px; }
   .thead { display: block; height: 30px; padding: 0 12px; }
   .thead > div:first-child, .ctl-head { display: none; }
-  .vol { min-width: 0; }
-  .vol input[type="range"] { width: 100%; min-width: 0; }
+  .vol input[type="range"] { max-width: none; }
   .mtip { right: auto; left: 8px; top: calc(100% + 4px); translate: none; white-space: normal; width: max-content; max-width: 200px; z-index: 1; }
   .row { grid-template-columns: 1fr; row-gap: 6px; padding: 10px 0; }
   .who { padding: 0 12px; }
   .wave { margin: 0 12px; }
-  .ctl { padding: 0 12px; grid-template-columns: auto 1fr auto auto; gap: 10px; }
+  .ctl { padding: 0 12px; grid-template-columns: auto minmax(0, 1fr) 104px 30px; gap: 10px; }
   .transport { flex-wrap: wrap; }
   .playhead { display: none; }
 }
