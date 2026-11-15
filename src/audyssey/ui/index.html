@@ -416,7 +416,12 @@ function renderRequest(r) {
   const frames = r.media.filter((m) => m.kind === "image");
   const clips = r.media.filter((m) => m.kind === "video");
   const how = r.input === "video" ? `영상 ${r.fps}fps${r.audio ? ", 오디오 포함" : ""}` : `프레임 ${r.fps}fps`;
+  // Validator requests are one per source; name it.
+  const source = (r.text.match(/^Source: (\{.*?\})\. /) || [])[1];
+  let name = null;
+  try { name = source && JSON.parse(source).name; } catch {}
   return el("div", {},
+    name ? el("p", { style: "font-weight:600;margin:14px 0 0" }, name) : null,
     el("div", { class: "part in" },
       el("h3", {}, `입력  ${r.model}, ${how}${r.attempt > 1 ? `, 재요청 ${r.attempt}` : ""}`),
       frames.length ? el("div", { class: "frames" }, frames.map((m) =>
