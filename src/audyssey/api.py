@@ -62,9 +62,7 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
         # Upload only preprocesses; the user starts separation or generation.
         # Release the lock before the final state is saved, so a client that sees
         # new/failed can start at once.
-        Thread(
-            target=analyze, args=(job, ctx, lock.release, None), daemon=True
-        ).start()
+        Thread(target=analyze, args=(job, ctx, lock.release, None), daemon=True).start()
         return snapshot
 
     @app.post("/api/jobs/{job_id}/start")
