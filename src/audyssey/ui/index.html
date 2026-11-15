@@ -219,6 +219,20 @@ input[type="range"]:disabled { opacity: .4; }
 .menu button[aria-disabled="true"]:focus-visible .mtip, .menu button.tell .mtip { opacity: 1; }
 @media (hover: hover) { .menu button[aria-disabled="true"]:hover .mtip { opacity: 1; } }
 .empty-row { padding: 28px 18px; color: var(--muted); }
+.start { display: grid; grid-template-columns: repeat(2, minmax(0, 280px)); justify-content: center; gap: 12px; padding: 28px 18px 18px; }
+.start .cap { grid-column: 1 / -1; text-align: center; margin: 0; min-height: 1.4em; }
+.start-option { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; text-align: start; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); transition-property: scale, border-color; transition-duration: 150ms; transition-timing-function: ease-out; }
+.start-option .chip { grid-row: span 2; background: var(--sunken); color: var(--ink); }
+.start-option b { font-size: 14px; font-weight: 600; }
+.start-option small { color: var(--muted); font-size: 12.5px; }
+.start-option[aria-disabled="true"] { cursor: not-allowed; }
+.start-option[aria-disabled="true"] b, .start-option[aria-disabled="true"] .chip { color: var(--faint); }
+.start-option:not([aria-disabled]):active { scale: 0.96; }
+@media (hover: hover) { .start-option:not([aria-disabled]):hover { border-color: var(--ink); } }
+.start-option .mtip { right: auto; left: 50%; top: calc(100% + 8px); translate: -50% 0; white-space: normal; width: max-content; max-width: 260px; z-index: 2; }
+.start-option[aria-disabled="true"]:focus-visible .mtip, .start-option.tell .mtip { opacity: 1; }
+@media (hover: hover) { .start-option[aria-disabled="true"]:hover .mtip { opacity: 1; } }
+@media (max-width: 760px) { .start { grid-template-columns: 1fr; } }
 
 /* edge popover: what crossed an edge, under the point that was clicked */
 .edgepop { position: fixed; z-index: 15; width: min(400px, calc(100vw - 16px)); max-height: min(440px, 60vh); display: flex; flex-direction: column; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-pop); }
@@ -606,6 +620,7 @@ function drawRows() {
   const box = $("rows");
   const list = trackList();
   closeMenu();
+  if (S.job && !methodOf(S.job) && S.job.state !== "failed") { box.replaceChildren(startPanel()); return; }
   if (!S.job || !list.length) {
     box.replaceChildren(el("div", { class: "empty-row" }, !S.job ? "영상을 올리면 분리된 트랙이 여기에 나옵니다." : S.job.state === "running" ? "분석 중" : "트랙 없음"));
     return;
@@ -613,6 +628,31 @@ function drawRows() {
   const locked = S.job.state !== "ready" || !!S.busy;
   box.replaceChildren(...list.map((t, i) => trackRow(t, i, locked)), el("div", { class: "playhead", id: "playhead" }));
   drawWaves(); drawPlayhead();
+}
+
+// Jobs from before the start step carry no method; they ran the old automatic flow.
+const methodOf = (job) => job.method || (job.state === "new" || (job.state === "running" && !job.sources.length) ? null : job.silent ? "generate" : "separate");
+// Upload stops after preprocessing; the user picks how the soundtrack is made.
+function startPanel() {
+  const job = S.job, ready = job.state === "new";
+  const option = (method, ic, label, what, blocked) => {
+    const off = !ready || !!blocked || !!S.busy;
+    return el("button", { class: "start-option", "aria-disabled": off ? "true" : null, "aria-describedby": blocked ? `why-${method}` : null,
+      onclick: (e) => (blocked ? e.currentTarget.classList.add("tell") : !off && start(method)) },
+      el("span", { class: "chip" }, icon(ic)), el("b", {}, label), el("small", {}, what),
+      blocked ? el("span", { class: "mtip", role: "tooltip", id: `why-${method}` }, blocked) : null);
+  };
+  return el("div", { class: "start" },
+    option("separate", "residual", "분리 시작", "영상 속 소리를 트랙으로 나눕니다", job.silent && "소리가 없는 영상이라 분리할 수 없습니다. 생성으로 시작하세요."),
+    option("generate", "spark", "생성 시작", "영상에 맞는 소리를 새로 만듭니다"),
+    el("p", { class: "cap" }, ready ? (job.silent ? "소리가 없는 영상입니다." : "") : "영상을 확인하는 중"));
+}
+async function start(method) {
+  if (S.busy) return;
+  S.busy = "start"; drawRows(); drawStatus();
+  try { S.job = await api(`/api/jobs/${S.job.id}/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method }) }); }
+  catch (e) { toast("시작하지 못했습니다. 다시 시도하세요.", e); }
+  finally { S.busy = null; drawAll(); loadJobs(S.job.id).catch(() => {}); }
 }
 
 function trackRow(t, index, locked) {
@@ -860,8 +900,11 @@ const serverName = (lane) => laneName(lane.name).replace(/^vLLM \(.+\)$/, "vLLM"
 function drawBoard() {
   const svg = $("board");
   const job = S.job;
-  const generating = job ? job.silent || job.sources.some((s) => s.origin === "generated") : false;
-  const idle = (step) => (["generate", "score"].includes(step) && !generating) || (["separate", "judge", "residual"].includes(step) && !!job?.silent);
+  // Before a start both paths stay possible; after it, the path not taken dims.
+  const method = job && methodOf(job);
+  const separating = !job || (!job.silent && method !== "generate");
+  const generating = !job || !method || method === "generate" || job.silent || job.sources.some((s) => s.origin === "generated") || job.steps.some((s) => stepKey(s.key) === "generate");
+  const idle = (step) => (["generate", "score"].includes(step) && !generating) || (["separate", "judge", "residual"].includes(step) && !separating);
   const lanes = (S.lanes.length ? S.lanes : LANES).filter((l) => l.steps.some((s) => s in COL));
   const row = (step) => Math.max(0, lanes.findIndex((l) => l.steps.includes(step)));
   const labelW = 150, colW = 124, nodeW = 96, nodeH = 46, laneH = 62, left = labelW + 18, gap = 4, r = 8;
@@ -908,7 +951,7 @@ function drawBoard() {
     if (b.y > a.y) return `M ${acx} ${a.y + nodeH} L ${acx} ${ey - r} Q ${acx} ${ey}, ${acx + r} ${ey} L ${b.x - gap} ${ey}`;
     return `M ${a.x + nodeW} ${acy} L ${bcx - r} ${acy} Q ${bcx} ${acy}, ${bcx} ${acy - r} L ${bcx} ${b.y + nodeH + gap}`;
   };
-  const written = new Set();
+  const written = new Set(), pending = {};
   for (const [from, to, kind, loop, label] of LINKS) {
     if (idle(from) || idle(to)) continue;
     const sTo = st[to].status, sFrom = st[from].status;
@@ -919,8 +962,9 @@ function drawBoard() {
     const looped = LOOP_TARGETS.has(to);
     let state = "";
     if (loop) {
-      if (!st[to].steps.some((s) => (s.round || 1) > 1)) continue;
-      state = retrying ? "active" : "done";
+      // Drawn only while the retry it causes is running.
+      if (!retrying) continue;
+      state = "active";
     } else if (sFrom !== "pending" && (looped ? fresh : runs.length)) state = "active";
     else if (sFrom !== "pending" && sTo !== "pending") state = "done";
     const d = route(from, to, loop);
@@ -938,10 +982,19 @@ function drawBoard() {
       const a = pos(from), b = pos(to), below = a.y === b.y;
       const x = below ? (a.x + b.x + nodeW) / 2 : (a.x + nodeW / 2 + b.x + nodeW) / 2;
       svg.append(make("text", { class: `elabel loop${state === "active" ? " on" : ""}`, x, y: below ? a.y + nodeH + 26 : b.y + nodeH / 2 - 7, "text-anchor": "middle" }, "재시도"));
-    } else if (label && !written.has(label)) {
-      written.add(label);
-      const a = pos(from), b = pos(to), x = a.y === b.y ? (a.x + nodeW + b.x) / 2 : (a.x + nodeW / 2 + b.x) / 2;
-      svg.append(make("text", { class: "elabel", x, y: b.y + nodeH / 2 + (ENTRY[`${from}>${to}`] || 0) - 7, "text-anchor": "middle" }, label));
+    } else if ((label || pending[kind]) && !written.has(label || pending[kind])) {
+      // Name the data where its type changes, above a horizontal stretch of the edge;
+      // a gap too narrow for the word hands it to the next edge of the same type.
+      const text = label || pending[kind];
+      const a = pos(from), b = pos(to), acy = a.y + nodeH / 2, ey = b.y + nodeH / 2 + (ENTRY[`${from}>${to}`] || 0);
+      let at = null;
+      if (b.y > a.y) at = [(a.x + nodeW / 2 + b.x) / 2, ey - 7];
+      else if (b.y < a.y) at = [(a.x + nodeW + b.x + nodeW / 2) / 2, acy - 7];
+      else if (b.x - a.x - nodeW >= 60) at = [(a.x + nodeW + b.x) / 2, acy - 7];
+      if (at) {
+        written.add(text); delete pending[kind];
+        svg.append(make("text", { class: "elabel", x: at[0], y: at[1], "text-anchor": "middle" }, text));
+      } else pending[kind] = text;
     }
   }
 
@@ -1169,11 +1222,12 @@ function renderFile(path) {
 function drawStatus() {
   const job = S.job;
   let cls = "", text = "대기";
-  if (S.busy) { cls = "run"; text = S.busy === "export" ? "내보내는 중" : "적용 중"; }
+  if (S.busy) { cls = "run"; text = S.busy === "export" ? "내보내는 중" : S.busy === "start" ? "시작하는 중" : "적용 중"; }
   else if (job) {
     const running = job.steps.filter((s) => s.status === "running").map((s) => STEPS[stepKey(s.key)]?.label).filter(Boolean);
     if (job.state === "running") { cls = "run"; text = running.length ? running[running.length - 1] : "시작"; }
     else if (job.state === "failed") { cls = "bad"; text = "실패"; }
+    else if (job.state === "new") text = "시작 대기";
     else { cls = "ok"; text = "완료"; }
   }
   $("status").replaceChildren(el("span", { class: `dot ${cls}` }), el("span", {}, text));
@@ -1211,9 +1265,13 @@ function follow(job) {
   S.events = new EventSource(`/api/jobs/${job.id}/events`);
   S.events.onmessage = (e) => {
     const next = JSON.parse(e.data);
-    if (next.id !== S.job?.id || S.busy) return;
+    if (next.id !== S.job?.id || next.version < S.job.version) return;
     S.job = next;
-    drawStatus(); drawBoard(); refreshTrace();
+    // The board follows the server even while a command runs, so a regenerate shows at once;
+    // rows wait for the command's own result.
+    drawBoard(); refreshTrace();
+    if (S.busy) return;
+    drawStatus();
     if (next.state !== state) { state = next.state; loadJobs(next.id).catch(() => {}); }
     const now = rowSignature(next);
     if (now !== sig) { sig = now; drawRuler(); drawRows(); syncTracks(); }
@@ -1222,7 +1280,7 @@ function follow(job) {
 
 async function loadJobs(select) {
   const jobs = await api("/api/jobs");
-  const label = (j) => `${j.id.slice(0, 6)}  ${j.state === "ready" ? "완료" : j.state === "failed" ? "실패" : "진행 중"}  ${j.sources.length}개 트랙`;
+  const label = (j) => `${j.id.slice(0, 6)}  ${j.state === "ready" ? "완료" : j.state === "failed" ? "실패" : j.state === "new" ? "시작 대기" : "진행 중"}  ${j.sources.length}개 트랙`;
   $("jobs").replaceChildren(el("option", { value: "" }, "새 프로젝트"), ...jobs.map((j) => el("option", { value: j.id }, label(j))));
   $("jobs").value = select || "";
   return jobs;
