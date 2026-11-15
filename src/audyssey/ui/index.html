@@ -219,6 +219,19 @@ input[type="range"]:disabled { opacity: .4; }
 @media (hover: hover) { .menu button[aria-disabled="true"]:hover .mtip { opacity: 1; } }
 .empty-row { padding: 28px 18px; color: var(--muted); }
 
+/* edge popover: what crossed an edge, under the point that was clicked */
+.edgepop { position: fixed; z-index: 15; width: min(400px, calc(100vw - 16px)); max-height: min(440px, 60vh); display: flex; flex-direction: column; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-pop); }
+.edgepop::before { content: ""; position: absolute; left: var(--caret, 50%); top: -6px; width: 12px; height: 12px; translate: -50% 0; rotate: 45deg; background: var(--surface); box-shadow: -1px -1px 0 rgb(27 33 48 / 0.08); border-radius: 2px; }
+.edgepop.above::before { top: auto; bottom: -6px; box-shadow: 1px 1px 0 rgb(27 33 48 / 0.08); }
+.edgepop-head { display: flex; align-items: center; gap: 10px; padding: 12px 8px 10px 14px; box-shadow: 0 1px 0 var(--line); }
+.edgepop-head .kind { width: 4px; align-self: stretch; border-radius: 2px; background: var(--kind, var(--faint)); }
+.edgepop-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.edgepop-head .where { color: var(--muted); font-size: 12px; }
+.edgepop-head .ibtn { margin-left: auto; }
+.edgepop-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 12px; }
+@media (prefers-reduced-motion: no-preference) { .edgepop:not([hidden]) { animation: pop-in 150ms ease-out; } }
+@keyframes pop-in { from { opacity: 0; } }
+
 /* inspector drawer */
 .scrim { position: fixed; inset: 0; background: rgb(14 17 23 / 0.18); z-index: 10; opacity: 0; transition-property: opacity; transition-duration: 200ms; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); background: var(--surface); box-shadow: var(--shadow-pop); z-index: 11; display: flex; flex-direction: column; translate: 100% 0; transition-property: translate; transition-duration: 250ms; transition-timing-function: var(--ease); }
@@ -352,6 +365,14 @@ details.sub > summary::-webkit-details-marker { display: none; }
   </section>
 </main>
 
+<div class="edgepop" id="edgepop" role="dialog" aria-labelledby="edgepop-title" hidden>
+  <div class="edgepop-head">
+    <span class="kind" aria-hidden="true"></span>
+    <div><h2 id="edgepop-title"></h2><div class="where" id="edgepop-where"></div></div>
+    <button class="ibtn" id="edgepop-close" aria-label="데이터 창 닫기"><svg class="i"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="edgepop-body" id="edgepop-body"></div>
+</div>
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
   <div class="drawer-head">
@@ -363,7 +384,7 @@ details.sub > summary::-webkit-details-marker { display: none; }
 
 <script>
 const $ = (id) => document.getElementById(id);
-const S = { job: null, lanes: [], trace: [], selected: null, events: null, busy: null, mode: "edit" };
+const S = { job: null, lanes: [], trace: [], selected: null, edge: null, events: null, busy: null, mode: "edit" };
 
 /* ---------- vocabulary ---------- */
 const STEPS = {
@@ -502,7 +523,7 @@ $("play").addEventListener("click", () => (A.playing ? pause() : play()));
 video.addEventListener("click", () => (A.playing ? pause() : play()));
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !e.target.closest("input, select, textarea, button, [role=button], .drawer")) { e.preventDefault(); A.playing ? pause() : play(); }
-  if (e.key === "Escape") { if (menuEl) closeMenu(true); else closeDrawer(); }
+  if (e.key === "Escape") { if (menuEl) closeMenu(true); else if (S.edge) closeEdge(true); else closeDrawer(); }
 });
 
 /* Tracks the editor plays: sources with audio, plus what separation left over. */
@@ -892,12 +913,12 @@ function drawBoard() {
     else if (sFrom !== "pending" && sTo !== "pending") state = "done";
     const d = route(from, to, loop);
     const key = `edge:${from}>${to}`;
-    const link = make("g", { class: `link${S.selected === key ? " selected" : ""}` });
+    const link = make("g", { class: `link${S.edge === key ? " selected" : ""}` });
     link.append(make("path", { class: `edge ${kind} ${state}`, d, "marker-end": `url(#tip-${kind})` }));
     // Pulses travel along the edge feeding the running step.
     if (state === "active") link.append(make("path", { class: `pulse ${kind}`, d }));
     // A wide transparent stroke makes the thin line easy to click.
-    link.append(make("path", { class: "hit", d, tabindex: 0, role: "button", "data-key": key, "aria-label": `${STEPS[from].label}에서 ${STEPS[to].label}로 보낸 ${DATA[kind]} 보기` }));
+    link.append(make("path", { class: "hit", d, tabindex: 0, role: "button", "aria-haspopup": "dialog", "aria-expanded": String(S.edge === key), "data-key": key, "aria-label": `${STEPS[from].label}에서 ${STEPS[to].label}로 보낸 ${DATA[kind]} 보기` }));
     svg.append(link);
     // Name the data where its type changes, above the segment entering the next step.
     if (label && !written.has(label)) {
@@ -926,8 +947,63 @@ function drawBoard() {
   $("servers-meta").textContent = S.lanes.length ? `서버 ${known.filter((l) => l.up).length}/${known.length} 응답` : "";
 }
 const shorten = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
-$("board").addEventListener("click", (e) => { const g = e.target.closest("[data-key]"); if (g) openDrawer(g.dataset.key); });
-$("board").addEventListener("keydown", (e) => { const g = e.target.closest("[data-key]"); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(g.dataset.key); } });
+// Steps open the drawer; edges open a popover under the point that was clicked, so the board stays in view.
+$("board").addEventListener("click", (e) => {
+  const g = e.target.closest("[data-key]");
+  if (!g) return;
+  if (g.classList.contains("hit")) openEdge(g.dataset.key, e.clientX, e.clientY);
+  else openDrawer(g.dataset.key);
+});
+$("board").addEventListener("keydown", (e) => {
+  const g = e.target.closest("[data-key]");
+  if (!g || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  if (!g.classList.contains("hit")) return openDrawer(g.dataset.key);
+  // From the keyboard, anchor at the middle of the edge.
+  const pt = g.getPointAtLength(g.getTotalLength() / 2), m = g.getScreenCTM();
+  openEdge(g.dataset.key, pt.x * m.a + m.e, pt.y * m.d + m.f);
+});
+
+/* ---------- edge popover ---------- */
+const pop = $("edgepop");
+let popAt = null; // anchor in board coordinates, so it follows scrolling and redraws
+function openEdge(key, x, y) {
+  if (S.edge === key) return closeEdge(true);
+  const m = $("board").getScreenCTM();
+  popAt = { x: (x - m.e) / m.a, y: (y - m.f) / m.d };
+  S.edge = key;
+  pop.hidden = false;
+  drawEdge(); drawBoard(); placeEdge();
+  $("edgepop-close").focus();
+}
+function closeEdge(refocus = false) {
+  if (!S.edge) return;
+  const key = S.edge;
+  S.edge = null; pop.hidden = true;
+  drawBoard();
+  if (refocus) document.querySelector(`.hit[data-key="${key}"]`)?.focus();
+}
+function placeEdge() {
+  if (!S.edge) return;
+  const m = $("board").getScreenCTM(), x = popAt.x * m.a + m.e, y = popAt.y * m.d + m.f;
+  const gap = 12, roomBelow = innerHeight - 8 - (y + gap), roomAbove = y - gap - 8;
+  pop.style.maxHeight = "";
+  const w = pop.offsetWidth, natural = pop.offsetHeight;
+  // Below the edge; above only when it fits there and not below. Neither: the roomier side, scrolled inside.
+  const below = natural <= roomBelow || roomBelow >= roomAbove;
+  const room = below ? roomBelow : roomAbove;
+  if (natural > room) pop.style.maxHeight = `${Math.max(120, room)}px`;
+  const h = pop.offsetHeight;
+  const left = Math.max(8, Math.min(innerWidth - w - 8, x - w / 2));
+  pop.style.left = `${left}px`;
+  pop.style.top = `${below ? y + gap : y - gap - h}px`;
+  pop.classList.toggle("above", !below);
+  pop.style.setProperty("--caret", `${Math.max(16, Math.min(w - 16, x - left))}px`);
+}
+$("edgepop-close").addEventListener("click", () => closeEdge(true));
+document.addEventListener("click", (e) => { if (S.edge && !pop.contains(e.target) && !e.target.closest(".hit")) closeEdge(); });
+addEventListener("resize", placeEdge);
+addEventListener("scroll", placeEdge, true);
 
 /* ---------- inspector drawer ---------- */
 let lastFocus = null;
@@ -958,7 +1034,6 @@ $("scrim").addEventListener("click", closeDrawer);
 function drawDrawer() {
   const step = S.selected;
   if (!step) return;
-  if (step.startsWith("edge:")) return drawEdge(step);
   const lane = S.lanes.find((l) => l.steps.includes(step));
   $("drawer-title").textContent = STEPS[step].label;
   $("drawer-where").textContent = lane ? [laneName(lane.name), ...lane.models].join("  /  ") : "";
@@ -975,16 +1050,19 @@ function drawDrawer() {
 // Korean subject particle: 이 after a final consonant, 가 otherwise.
 const subject = (w) => w + ((w.charCodeAt(w.length - 1) - 0xAC00) % 28 ? "이" : "가");
 // An edge shows only what crossed it, per call of the step that received it.
-function drawEdge(key) {
+function drawEdge() {
+  const key = S.edge;
+  if (!key) return;
   const [from, to] = key.slice(5).split(">");
   const link = LINKS.find((l) => l[0] === from && l[1] === to), carry = CARRIES[`${from}>${to}`];
-  $("drawer-title").textContent = `${STEPS[from].label} → ${STEPS[to].label}`;
-  $("drawer-where").textContent = link[3] ? `${DATA[link[2]]}, 다시 하도록 돌려보낸 판정` : `${DATA[link[2]]}, ${subject(STEPS[to].label)} 받은 입력`;
-  const body = $("drawer-body");
+  $("edgepop-title").textContent = `${STEPS[from].label} → ${STEPS[to].label}`;
+  $("edgepop-where").textContent = link[3] ? `${DATA[link[2]]}, 다시 하도록 돌려보낸 판정` : `${DATA[link[2]]}, ${subject(STEPS[to].label)} 받은 입력`;
+  pop.style.setProperty("--kind", `var(--${link[2]})`);
+  const body = $("edgepop-body");
   const calls = S.trace.filter((c) => TOOL_STEP[c.tool] === carry.step).reverse();
-  if (!S.job || !calls.length) { body.replaceChildren(el("p", { class: "none" }, "아직 보낸 데이터 없음")); return; }
-  const open = body.dataset.key === S.selected ? new Set([...body.querySelectorAll("details.call[open]")].map((d) => d.dataset.id)) : new Set();
-  body.dataset.key = S.selected;
+  if (!S.job || !calls.length) { body.replaceChildren(el("p", { class: "none" }, "아직 보낸 데이터 없음")); placeEdge(); return; }
+  const open = body.dataset.key === key ? new Set([...body.querySelectorAll("details.call[open]")].map((d) => d.dataset.id)) : new Set();
+  body.dataset.key = key;
   body.replaceChildren(...calls.map((c, i) => {
     const value = carry.output ? c.output : Object.fromEntries(carry.keys.filter((k) => c.inputs?.[k] != null).map((k) => [k, c.inputs[k]]));
     const shown = carry.output ? renderOutput(c) : carry.keys.length === 1 ? renderValue(value[carry.keys[0]]) : renderValue(value);
@@ -992,6 +1070,9 @@ function drawEdge(key) {
       el("summary", {}, icon("chev"), callTitle(c), el("span", { class: "meta" }, sec(c.seconds))),
       el("div", { class: "block" }, el("div", { class: "block-head" }, el("span", { class: `tag ${link[3] ? "out" : "in"}` }, link[3] ? "판정" : "전달")), shown));
   }));
+  // Folding changes the height, which can flip it above or below.
+  for (const d of body.querySelectorAll("details")) d.addEventListener("toggle", placeEdge);
+  placeEdge();
 }
 function callTitle(c) {
   const id = c.step.includes(":") ? c.step.split(":")[1] : null;
@@ -1085,6 +1166,7 @@ function drawAll() {
   drawStatus(); drawBoard(); drawRuler(); drawRows(); drawTransport();
   $("drop").hidden = !!S.job;
   if (S.selected) drawDrawer();
+  drawEdge();
 }
 
 let traceTimer;
@@ -1092,12 +1174,13 @@ function refreshTrace() {
   clearTimeout(traceTimer);
   traceTimer = setTimeout(async () => {
     if (!S.job) return;
-    try { S.trace = await api(`/api/jobs/${S.job.id}/trace`); if (S.selected) drawDrawer(); } catch {}
+    try { S.trace = await api(`/api/jobs/${S.job.id}/trace`); if (S.selected) drawDrawer(); drawEdge(); } catch {}
   }, 200);
 }
 function rowSignature(job) { return JSON.stringify([job.state, job.residual, job.sources.map((s) => [s.id, s.status, s.keep, s.gain, s.pitch_semitones, s.attempts, s.track_path, s.filter?.passed])]); }
 
 function follow(job) {
+  closeEdge();
   S.events?.close();
   pause();
   for (const t of A.tracks.values()) t.gain.disconnect();
