@@ -1,6 +1,6 @@
 services:
   main:
-    image: ghcr.io/capstone-audissey-fall-2026/audyssey-app:latest
+    image: ghcr.io/capstone-audissey-fall-2026/audyssey-app:${AUDYSSEY_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/app.Dockerfile
@@ -23,7 +23,7 @@ services:
     volumes: ["jobs:/app/work/jobs"]
 
   separation:
-    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:latest
+    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:${AUDYSSEY_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/tools.Dockerfile
@@ -44,7 +44,7 @@ services:
               capabilities: [gpu]
 
   judge:
-    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:latest
+    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:${AUDYSSEY_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/tools.Dockerfile
@@ -65,7 +65,7 @@ services:
               capabilities: [gpu]
 
   grounding:
-    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:latest
+    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:${AUDYSSEY_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/tools.Dockerfile
@@ -86,7 +86,7 @@ services:
               capabilities: [gpu]
 
   generation:
-    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:latest
+    image: ghcr.io/capstone-audissey-fall-2026/audyssey-tools:${AUDYSSEY_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/tools.Dockerfile
