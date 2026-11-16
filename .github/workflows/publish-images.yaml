@@ -2,6 +2,16 @@ name: publish-images
 on:
   push:
     branches: [main]
+    # Only what the Dockerfiles copy (README.md too, but only as package metadata);
+    # docs, tests, Compose and CI-only changes keep the current images.
+    # Add a path here when a Dockerfile starts copying it.
+    paths:
+      - src/**
+      - pyproject.toml
+      - uv.lock
+      - gpu/**
+      - docker/**
+      - .github/workflows/publish-images.yaml
   workflow_dispatch:
 
 permissions:
