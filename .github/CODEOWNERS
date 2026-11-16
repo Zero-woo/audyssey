@@ -1,12 +1,12 @@
-# Core files: a change needs @gwpark0741's approval (docs/contributing.md).
+# Core files: a change needs approval from @gwpark0741 or @Zero-woo; .github/ only from @gwpark0741 (docs/contributing.md).
 # Module folders under src/audyssey/tools/ have no owner; any teammate can review them.
-/src/audyssey/contracts.py @gwpark0741
-/src/audyssey/graph.py @gwpark0741
-/src/audyssey/api.py @gwpark0741
-/src/audyssey/settings.py @gwpark0741
-/pyproject.toml @gwpark0741
-/uv.lock @gwpark0741
-/compose.yaml @gwpark0741
-/docker/ @gwpark0741
-/gpu/ @gwpark0741
+/src/audyssey/contracts.py @gwpark0741 @Zero-woo
+/src/audyssey/graph.py @gwpark0741 @Zero-woo
+/src/audyssey/api.py @gwpark0741 @Zero-woo
+/src/audyssey/settings.py @gwpark0741 @Zero-woo
+/pyproject.toml @gwpark0741 @Zero-woo
+/uv.lock @gwpark0741 @Zero-woo
+/compose.yaml @gwpark0741 @Zero-woo
+/docker/ @gwpark0741 @Zero-woo
+/gpu/ @gwpark0741 @Zero-woo
 /.github/ @gwpark0741
