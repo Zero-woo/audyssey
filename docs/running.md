@@ -407,7 +407,7 @@ LANGSMITH_PROJECT=audyssey
 | `AUDYSSEY_SAM3_MODEL` / `AUDYSSEY_SAM3_DEVICE` | `facebook/sam3.1` / `cuda` | 그라운딩 모델과 장치 (CUDA 전용) |
 | `AUDYSSEY_SAM3_TRACK_FPS` | `2` | 마스크 추적 fps. `0`이면 원본 fps (24GB GPU에서는 메모리 부족 위험) |
 
-Compose에서만 쓰는 값(`.env`): `HF_CACHE`, `AUDYSSEY_{SEPARATION,JUDGE,GROUNDING,GENERATION,VLLM}_GPU`, `AUDYSSEY_VLLM_MODEL`,
+Compose에서만 쓰는 값(`.env`): `AUDYSSEY_IMAGE_TAG`(이미지 태그, 비우면 `latest`), `HF_CACHE`, `AUDYSSEY_{SEPARATION,JUDGE,GROUNDING,GENERATION,VLLM}_GPU`, `AUDYSSEY_VLLM_MODEL`,
 `AUDYSSEY_VLLM_GPU_UTIL`, `GOOGLE_API_KEY`, `LANGSMITH_*`.
 
 **생성**
