@@ -37,7 +37,15 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
 
     def load(job_id: str) -> Job:
         try:
-            return ctx.store.load(job_id)
+            snapshot = ctx.store.load(job_id)
+            cached = jobs.get(job_id)
+            lock = locks.get(job_id)
+            if cached is None or (
+                (lock is None or not lock.locked())
+                and snapshot.version > cached.version
+            ):
+                jobs[job_id] = snapshot
+            return snapshot
         except KeyError as exc:
             raise HTTPException(404, "job not found") from exc
 
@@ -185,7 +193,9 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
             archive = Path(tmp) / "export.zip"
             with zipfile.ZipFile(archive, "w") as stream:
                 for rel in paths:
-                    stream.write(directory / rel, rel.removeprefix("out/"))
+                    stream.write(
+                        directory / rel, rel.replace("\\", "/").removeprefix("out/")
+                    )
             data = archive.read_bytes()
         return Response(
             data,
@@ -197,10 +207,14 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
 
     @app.get("/")
     def root() -> HTMLResponse:
-        return HTMLResponse((files("audyssey.ui") / "index.html").read_text())
+        return HTMLResponse(
+            (files("audyssey.ui") / "index.html").read_text(encoding="utf-8")
+        )
 
     @app.get("/dev")
     def dev() -> HTMLResponse:
-        return HTMLResponse((files("audyssey.devui") / "index.html").read_text())
+        return HTMLResponse(
+            (files("audyssey.devui") / "index.html").read_text(encoding="utf-8")
+        )
 
     return app

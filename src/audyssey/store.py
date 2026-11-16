@@ -1,4 +1,5 @@
 import re
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import RLock
@@ -37,16 +38,34 @@ class JobStore:
     def save(self, job: Job) -> Job:
         with self._lock:
             directory = self.dir(job.id)
-            job.version += 1
-            with NamedTemporaryFile(mode="w", dir=directory, delete=False) as stream:
-                stream.write(job.model_dump_json())
-                temporary = Path(stream.name)
-            temporary.replace(directory / "job.json")
+            version = job.version + 1
+            snapshot = job.model_copy(update={"version": version})
+            stream = NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=directory, delete=False
+            )
+            temporary = Path(stream.name)
+            try:
+                with stream:
+                    stream.write(snapshot.model_dump_json())
+                for attempt in range(5):
+                    try:
+                        temporary.replace(directory / "job.json")
+                        break
+                    except PermissionError:
+                        if attempt == 4:
+                            raise
+                        time.sleep(0.02 * 2**attempt)
+                job.version = version
+            finally:
+                temporary.unlink(missing_ok=True)
         return job
 
     def load(self, job_id: str) -> Job:
         try:
-            return Job.model_validate_json((self.dir(job_id) / "job.json").read_text())
+            with self._lock:
+                return Job.model_validate_json(
+                    (self.dir(job_id) / "job.json").read_text(encoding="utf-8")
+                )
         except FileNotFoundError as exc:
             raise KeyError(job_id) from exc
 

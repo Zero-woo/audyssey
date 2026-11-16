@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "audyssey": "./src/audyssey/studio.py:graph"
+  },
+  "env": ".env"
+}
