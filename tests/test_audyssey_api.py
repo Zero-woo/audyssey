@@ -59,6 +59,19 @@ class ApiTests(unittest.TestCase):
         self.assertEqual([s["key"] for s in job["steps"]], ["preprocess"])
         self.assertEqual(job["sources"], [])
 
+    def test_commands_use_job_updated_by_studio_graph(self):
+        from audyssey.graph import build_graph
+
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        result = build_graph(self.app.state.ctx).invoke({"job_id": job_id})
+        self.assertEqual(result["job"].state, "ready")
+        response = self.command(
+            job_id, {"type": "set_gain", "source_id": "s1", "gain": 0.5}
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["sources"][0]["gain"], 0.5)
+
     def test_start_twice_is_rejected(self):
         job = self.ready()
         response = self.client.post(f"/api/jobs/{job['id']}/start", json={"method": "separate"})

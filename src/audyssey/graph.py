@@ -352,7 +352,9 @@ def build_graph(
     context = ctx
 
     def prepare(state: AnalysisInput) -> dict:
-        job = state.job if state.job is not None else context.store.load(state.job_id)
+        job = context.store.load(state.job_id) if state.job_id else state.job
+        if job is None:
+            raise ValueError("job_id or job is required")
         job.state, job.error = "running", None
         if state.method is not None:
             job.method = "generate" if job.silent else state.method

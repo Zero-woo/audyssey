@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from langgraph.checkpoint.memory import InMemorySaver
+
 from audyssey import graph
 from audyssey.settings import Settings
 from audyssey.store import JobStore
@@ -35,6 +37,16 @@ class GraphFactoryTests(unittest.TestCase):
             self.assertIn(name, diagram)
         plan.assert_not_called()
         self.assertFalse((self.directory / "audio.wav").exists())
+
+    def test_studio_entry_exports_the_shared_graph(self):
+        project = Path(__file__).resolve().parents[1]
+        config = json.loads((project / "langgraph.json").read_text(encoding="utf-8"))
+        path, name = config["graphs"]["audyssey"].split(":")
+        pipeline = graph.build_graph(self.ctx)
+        with patch.object(graph, "build_graph", return_value=pipeline) as build:
+            namespace = runpy.run_path(str(project / path))
+        self.assertIs(namespace[name], pipeline)
+        build.assert_called_once_with()
 
     def test_graph_runs_from_a_stored_job_id(self):
         result = graph.build_graph(self.ctx).invoke({"job_id": self.job.id})
@@ -70,6 +82,16 @@ class GraphFactoryTests(unittest.TestCase):
             job = result["job"]
             self.assertEqual(job.state, "ready", job.error)
             self.assertTrue((self.ctx.store.dir(job.id) / job.residual.path).is_file())
+
+    def test_checkpointed_thread_can_select_a_new_job_id(self):
+        other, _ = self.ctx.store.create("other.mp4", self.video.read_bytes())
+        pipeline = graph.build_graph(self.ctx)
+        pipeline.checkpointer = InMemorySaver()
+        config = {"configurable": {"thread_id": "studio-test"}}
+        pipeline.invoke({"job_id": self.job.id}, config)
+        result = pipeline.invoke({"job_id": other.id}, config)
+        self.assertEqual(result["job"].id, other.id)
+        self.assertEqual(result["job"].state, "ready")
 
     def test_preprocess_then_start_reuses_prepared_audio(self):
         pipeline = graph.build_graph(self.ctx)
@@ -126,3 +148,7 @@ class GraphFactoryTests(unittest.TestCase):
         self.assertEqual((job.state, job.error), ("failed", "cannot compile"))
         self.assertEqual(self.ctx.store.load(job.id).state, "failed")
         finish.assert_called_once_with()
+
+
+import json
+import runpy
