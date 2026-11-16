@@ -104,6 +104,24 @@ class GraphFactoryTests(unittest.TestCase):
             result = pipeline.invoke({"job_id": self.job.id, "method": "separate"})
         self.assertEqual(result["job"].state, "ready", result["job"].error)
 
+    def test_studio_can_switch_an_existing_job_between_methods(self):
+        pipeline = graph.build_graph(self.ctx)
+        pipeline.invoke({"job_id": self.job.id, "method": "separate"})
+        generated = pipeline.invoke({"job_id": self.job.id, "method": "generate"})[
+            "job"
+        ]
+        self.assertTrue(
+            all(source.origin == "generated" for source in generated.sources)
+        )
+        self.assertEqual(generated.sources[0].status, "skipped")
+        separated = pipeline.invoke({"job_id": self.job.id, "method": "separate"})[
+            "job"
+        ]
+        self.assertTrue(
+            all(source.origin == "separated" for source in separated.sources)
+        )
+        self.assertTrue(all(source.status == "done" for source in separated.sources))
+
     def test_direct_graph_failure_is_saved(self):
         self.ctx.tools = replace(
             self.ctx.tools, plan=Mock(side_effect=RuntimeError("planner unavailable"))

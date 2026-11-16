@@ -432,6 +432,7 @@ def build_graph(
             job.duration,
         )
         previous = {source.plan.name: source for source in job.sources}
+        origin = "generated" if job.silent or job.method == "generate" else "separated"
         sources = []
         for i, plan_item in enumerate(plans, 1):
             source = previous.get(plan_item.name)
@@ -439,12 +440,14 @@ def build_graph(
                 source = Source(
                     id=f"s{i}",
                     plan=plan_item,
-                    origin="generated"
-                    if job.silent or job.method == "generate"
-                    else "separated",
+                    origin=origin,
                 )
             else:
                 source.id, source.plan = f"s{i}", plan_item
+                if source.origin != origin:
+                    source.origin, source.status = origin, "pending"
+                    source.attempts = 0
+                    source.track_path, source.filter = None, None
             sources.append(source)
         job.sources = sources
         update_step(
