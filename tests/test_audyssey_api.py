@@ -220,6 +220,7 @@ class ApiTests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="board"', response.text)
+        self.assertIn("내보내기", response.text)
         self.assertIn("Audyssey dev UI", self.client.get("/dev").text)
 
     def test_trace_records_each_step_with_its_server(self):

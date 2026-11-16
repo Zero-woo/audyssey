@@ -197,10 +197,14 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
 
     @app.get("/")
     def root() -> HTMLResponse:
-        return HTMLResponse((files("audyssey.ui") / "index.html").read_text())
+        return HTMLResponse(
+            (files("audyssey.ui") / "index.html").read_text(encoding="utf-8")
+        )
 
     @app.get("/dev")
     def dev() -> HTMLResponse:
-        return HTMLResponse((files("audyssey.devui") / "index.html").read_text())
+        return HTMLResponse(
+            (files("audyssey.devui") / "index.html").read_text(encoding="utf-8")
+        )
 
     return app
