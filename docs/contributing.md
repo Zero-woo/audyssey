@@ -8,6 +8,7 @@
 - 담당 모듈 폴더만 고칩니다. `src/audyssey/tools/<모듈>/real.py`의 함수를 같은 시그니처([도구 함수](architecture.md#계약-함수-명령-api))로 구현합니다.
 - 도구를 바꿀 때 `graph.py`, `api.py`, UI를 고쳐야 한다면 설계 문제일 수 있으니 팀에 먼저 공유합니다.
 - `contracts.py`는 모든 모듈이 함께 쓰는 파일입니다. 바꿀 때는 PR에서 팀 합의를 받고 머지합니다.
+- `contracts.py`, `graph.py`, `api.py`, `settings.py`, 의존성, Docker·Compose, CI 설정은 핵심 파일입니다([`.github/CODEOWNERS`](../.github/CODEOWNERS)). 바꾸는 PR은 관리자(@gwpark0741) 승인이 있어야 머지됩니다.
 - 작업 상태는 명령으로만 바꿉니다(`handle_command`). 새 편집 기능은 새 명령으로 추가합니다.
 
 **설정**
@@ -46,12 +47,24 @@
 |---|---|---|
 | 1. 브랜치 | 없음 | 최신 `main`에서 브랜치를 만듦 |
 | 2. 커밋 | 없음 (로컬 훅 없음) | 커밋 전에 [로컬 검사](#로컬-검사)를 통과시킴 |
-| 3. push | 없음. push만으로는 CI가 돌지 않음 | `git push -u origin <브랜치>` |
-| 4. PR (대상 `main`) | `ci-lint`가 job 2개를 실행. `lint-and-format-check`(필수): ruff lint·format, ty, unittest. `numpy-1x`: Python 3.12 + numpy 1.26 unittest | 설명에 요약과 확인 방법을 적음. `contracts.py`를 바꿨다면 팀 합의를 받음. 실패하면 고쳐서 다시 push |
-| 5. merge | `main` 보호 규칙 적용: 필수 검사 통과 전 머지 불가(관리자 포함), 강제 push와 브랜치 삭제 금지 | 필수 승인 수는 0이지만 리뷰를 받고 머지. 머지 커밋 방식을 쓰고, 머지한 브랜치는 직접 지움 |
-| 6. 배포 | `main`에 반영되면 `publish-images`가 `audyssey-app`, `audyssey-tools`를 빌드해 GHCR에 `latest`와 커밋 SHA 태그로 올림 (수동 실행 가능, PR에서는 올리지 않음) | GPU 서버: `docker compose pull && docker compose up -d`. RunPod: Pod를 다시 만들어 새 이미지를 받거나 SHA 태그로 고정 |
+| 3. push | 없음. push만으로는 CI가 돌지 않음 | `git push -u origin <브랜치>` (팀원은 write 권한으로 레포에 직접 push) |
+| 4. PR (대상 `main`) | `ci-lint`가 job 3개를 실행하며 모두 필수:<br>- `lint-and-format-check`: ruff lint·format, ty, unittest<br>- `numpy-1x`: Python 3.12 + numpy 1.26 unittest<br>- `docker-build`: app 이미지 빌드(push 안 함). tools 이미지는 `docker/tools.Dockerfile`, `gpu/`, 도구 코드, 의존성이 바뀐 PR에서만 빌드 | 설명에 요약과 확인 방법을 적음. 핵심 파일을 바꿨다면 팀 합의를 받음. 실패하면 고쳐서 다시 push |
+| 5. merge | `main` 보호 규칙 적용:<br>- 필수 검사 통과와 최신 `main` 반영 전에는 머지 불가 (관리자 포함)<br>- 승인 1명 필요. 핵심 파일은 관리자 승인 필요. 새로 push하면 기존 승인은 다시 받아야 함<br>- 강제 push와 브랜치 삭제 금지 | 리뷰를 받고 머지. 관리자 본인 PR은 승인 없이 머지할 수 있지만 검사는 똑같이 통과해야 함. 머지 커밋 방식을 쓰고, 머지한 브랜치는 직접 지움 |
+| 6. 배포 | `main`에 반영되면 `publish-images`가 `audyssey-app`, `audyssey-tools`를 빌드해 GHCR에 `latest`와 커밋 SHA 태그로 올림 (수동 실행 가능, PR에서는 올리지 않음) | 아래 [서버 갱신](#서버-갱신)대로 SHA 태그로 고정해 올림. RunPod은 Pod를 다시 만들 때 SHA 태그를 지정 |
 
 이미지는 공개되어 있어 로그인 없이 받을 수 있습니다. tools 이미지는 약 23GB라 빌드와 다운로드에 시간이 걸립니다.
+
+## 서버 갱신
+
+공용 GPU 서버는 `latest`가 아니라 확인한 커밋의 이미지로 고정합니다. `latest`는 머지할 때마다 바뀌므로, 그대로 받으면 확인하지 않은 이미지가 올라갈 수 있습니다.
+
+1. `.env`의 `AUDYSSEY_IMAGE_TAG`에 머지 커밋의 전체 SHA를 넣습니다. 비우면 `latest`를 씁니다.
+2. 이미지를 받고 띄웁니다.
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+3. 실제 영상으로 분리와 생성을 한 번씩 돌려 확인합니다. 모델을 올리는 첫 실행은 느립니다.
+4. 문제가 있으면 `AUDYSSEY_IMAGE_TAG`를 이전 SHA로 되돌리고 2번을 다시 합니다.
 
 ## 로컬 검사
 
