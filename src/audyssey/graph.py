@@ -174,7 +174,7 @@ def generate_source(job: Job, source: Source, ctx: Context) -> None:
             raise RuntimeError("generation produced no track")
         final = directory / f"tracks/{source.id}.wav"
         best_path.replace(final)
-        source.track_path = str(final.relative_to(directory))
+        source.track_path = final.relative_to(directory).as_posix()
         source.filter = best_result
         source.status = "done"
     except Exception as exc:
@@ -235,7 +235,7 @@ def process_source(job: Job, source: Source, ctx: Context) -> None:
                 directory / f"tracks/{source.id}.wav",
                 source.attempts,
             )
-            source.track_path = str(path.relative_to(directory))
+            source.track_path = path.relative_to(directory).as_posix()
             update_step(
                 job,
                 ctx,

@@ -185,7 +185,9 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
             archive = Path(tmp) / "export.zip"
             with zipfile.ZipFile(archive, "w") as stream:
                 for rel in paths:
-                    stream.write(directory / rel, rel.removeprefix("out/"))
+                    stream.write(
+                        directory / rel, rel.replace("\\", "/").removeprefix("out/")
+                    )
             data = archive.read_bytes()
         return Response(
             data,
