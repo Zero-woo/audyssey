@@ -270,7 +270,7 @@ docker run -d --name validator-vllm --gpus '"device=0"' --user 10001:10001 \
 | 대상 | 설정 |
 |---|---|
 | Gemini 영상 (Google SDK) | `AUDYSSEY_PLANNER_API=gemini`, `AUDYSSEY_PLANNER_INPUT=video`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`, `AUDYSSEY_PLANNER_FPS=1`, `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`. 키는 `AUDYSSEY_PLANNER_API_KEY` (Compose에서는 `GOOGLE_API_KEY`를 넣으면 대신 전달). 클립을 Files API로 올리고 주소와 fps를 보낸 뒤 지웁니다. 주소는 SDK가 정하므로 `BASE_URL`은 쓰지 않습니다 |
-| OpenRouter (Gemini, GPT 등) | `AUDYSSEY_PLANNER_API=openrouter`, `AUDYSSEY_PLANNER_BASE_URL=https://openrouter.ai/api/v1`, `AUDYSSEY_PLANNER_MODEL=google/gemini-...`, 키는 `AUDYSSEY_PLANNER_API_KEY`(OpenRouter 키). `video` 입력은 영상 입력을 받는 모델만 되고, fps는 지정할 수 없어 모델 기본값을 씁니다. GPT처럼 영상을 받지 않는 모델은 `frames` |
+| OpenRouter (Gemini, GPT 등) | `AUDYSSEY_PLANNER_API=openrouter`, `AUDYSSEY_PLANNER_BASE_URL=https://openrouter.ai/api/v1`, `AUDYSSEY_PLANNER_MODEL=google/gemini-...`, 키는 `AUDYSSEY_PLANNER_API_KEY`(OpenRouter 키). `video` 입력은 영상 입력을 받는 모델만 됩니다. Gemini로 실측하면 영상 속 소리는 전달되고, fps는 지정할 수 없어 1fps로 들어갑니다(입력 토큰이 Gemini 직접 호출 fps=1과 같음). GPT처럼 영상을 받지 않는 모델은 `frames` |
 | Gemini 프레임 (OpenAI 호환) | `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`. 이 엔드포인트는 영상을 받지 않습니다 |
 | OpenAI | `AUDYSSEY_PLANNER_BASE_URL=https://api.openai.com/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`, 키는 `AUDYSSEY_PLANNER_API_KEY`. OpenAI API는 영상을 받지 않으므로 `frames`만 씁니다 |
 | 직접 띄운 vLLM | `AUDYSSEY_PLANNER_BASE_URL=http://<vllm>:8000/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`. 인증 없는 서버면 키 생략. `video` 입력은 서버를 `--trust-request-mm-kwargs`로 띄워야 fps가 적용됩니다 |
