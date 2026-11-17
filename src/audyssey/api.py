@@ -161,19 +161,39 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
         lanes = trace.lanes(settings)
         for lane in lanes:
             lane["up"] = None
-            remote = [
-                urls[s][1] for s in lane["steps"] if urls.get(s, ("",))[0] == "remote"
-            ]
-            if lane["id"].startswith("llm:"):
-                remote = [lane["id"].removeprefix("llm:")]
             if lane["id"] == "app":
                 lane["up"] = True
-            elif remote:
-                url = remote[0] if "://" in remote[0] else f"http://{remote[0]}"
-                try:
-                    lane["up"] = httpx.get(f"{url}/health", timeout=1).is_success
-                except httpx.HTTPError:
+                continue
+            headers: dict[str, str] = {}
+            if lane["id"].startswith("llm:"):
+                # Check the configured URL as is: Pod proxies use https and a /v1 path.
+                endpoint = (
+                    settings.planner_endpoint()
+                    if "plan" in lane["steps"]
+                    else settings.validator_endpoint()
+                )
+                if not endpoint.base_url.strip():
                     lane["up"] = False
+                    continue
+                # OpenRouter's /key needs a valid key, so a wrong key shows as down.
+                path = "/key" if endpoint.api == "openrouter" else "/models"
+                url, timeout = endpoint.base_url.rstrip("/") + path, 3
+                if endpoint.api_key:
+                    headers["Authorization"] = f"Bearer {endpoint.api_key}"
+            else:
+                remote = [
+                    urls[s][1]
+                    for s in lane["steps"]
+                    if urls.get(s, ("",))[0] == "remote"
+                ]
+                if not remote:
+                    continue
+                base = remote[0] if "://" in remote[0] else f"http://{remote[0]}"
+                url, timeout = f"{base.rstrip('/')}/health", 1
+            try:
+                lane["up"] = httpx.get(url, headers=headers, timeout=timeout).is_success
+            except httpx.HTTPError:
+                lane["up"] = False
         return lanes
 
     @app.get("/api/jobs/{job_id}/trace")
