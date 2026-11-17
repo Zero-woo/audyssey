@@ -123,10 +123,13 @@ def _host(url: str) -> str:
 def _endpoint_lane(endpoint: LLMEndpoint) -> tuple[str, str, str]:
     if endpoint.api == "gemini":
         return "gemini", "Gemini API", endpoint.model
-    if endpoint.api == "openrouter":
-        return "openrouter", "OpenRouter", endpoint.model
     host = _host(endpoint.base_url)
-    name = "OpenAI API" if "openai.com" in host else f"vLLM ({host})"
+    if endpoint.api == "openrouter":
+        name = "OpenRouter"
+    elif "openai.com" in host:
+        name = "OpenAI API"
+    else:
+        name = f"vLLM ({host})"
     return f"llm:{host}", name, endpoint.model
 
 
