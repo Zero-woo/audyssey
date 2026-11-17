@@ -269,7 +269,8 @@ docker run -d --name validator-vllm --gpus '"device=0"' --user 10001:10001 \
 
 | 대상 | 설정 |
 |---|---|
-| Gemini 영상 (네이티브 API) | `AUDYSSEY_PLANNER_API=gemini`, `AUDYSSEY_PLANNER_INPUT=video`, `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`, `AUDYSSEY_PLANNER_FPS=1`, `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`. 키는 `AUDYSSEY_PLANNER_API_KEY` (Compose에서는 `GOOGLE_API_KEY`를 넣으면 대신 전달) |
+| Gemini 영상 (Google SDK) | `AUDYSSEY_PLANNER_API=gemini`, `AUDYSSEY_PLANNER_INPUT=video`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`, `AUDYSSEY_PLANNER_FPS=1`, `AUDYSSEY_PLANNER_VIDEO_AUDIO=true`. 키는 `AUDYSSEY_PLANNER_API_KEY` (Compose에서는 `GOOGLE_API_KEY`를 넣으면 대신 전달). 클립을 Files API로 올리고 주소와 fps를 보낸 뒤 지웁니다. 주소는 SDK가 정하므로 `BASE_URL`은 쓰지 않습니다 |
+| OpenRouter (Gemini, GPT 등) | `AUDYSSEY_PLANNER_API=openrouter`, `AUDYSSEY_PLANNER_BASE_URL=https://openrouter.ai/api/v1`, `AUDYSSEY_PLANNER_MODEL=google/gemini-...`, 키는 `AUDYSSEY_PLANNER_API_KEY`(OpenRouter 키). `video` 입력은 영상 입력을 받는 모델만 되고, fps는 지정할 수 없어 모델 기본값을 씁니다. GPT처럼 영상을 받지 않는 모델은 `frames` |
 | Gemini 프레임 (OpenAI 호환) | `AUDYSSEY_PLANNER_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `AUDYSSEY_PLANNER_MODEL=gemini-3.5-flash-lite`. 이 엔드포인트는 영상을 받지 않습니다 |
 | OpenAI | `AUDYSSEY_PLANNER_BASE_URL=https://api.openai.com/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`, 키는 `AUDYSSEY_PLANNER_API_KEY`. OpenAI API는 영상을 받지 않으므로 `frames`만 씁니다 |
 | 직접 띄운 vLLM | `AUDYSSEY_PLANNER_BASE_URL=http://<vllm>:8000/v1`, `AUDYSSEY_PLANNER_MODEL=<모델 ID>`. 인증 없는 서버면 키 생략. `video` 입력은 서버를 `--trust-request-mm-kwargs`로 띄워야 fps가 적용됩니다 |
@@ -406,11 +407,11 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `AUDYSSEY_PLANNER_BASE_URL` / `AUDYSSEY_PLANNER_MODEL` / `AUDYSSEY_PLANNER_API_KEY` | 빈 값 | OpenAI 호환 플래너 주소, 모델, 키 |
-| `AUDYSSEY_PLANNER_API` | `openai` | `openai`(Chat Completions: OpenAI, vLLM, Gemini OpenAI 호환) 또는 `gemini`(네이티브 API, `video` 입력만) |
+| `AUDYSSEY_PLANNER_API` | `openai` | `openai`(Chat Completions: OpenAI, vLLM, Gemini OpenAI 호환), `gemini`(Google SDK, `video` 입력만) 또는 `openrouter`(OpenRouter Chat Completions, vLLM 전용 옵션 없이 보냄) |
 | `AUDYSSEY_PLANNER_INPUT` | `frames` | `frames`(이미지 여러 장) 또는 `video`(영상 하나) |
 | `AUDYSSEY_PLANNER_FPS` | `1` | `frames`면 프레임을 뽑는 fps, `video`면 모델이 샘플링하는 fps (0 초과~30) |
 | `AUDYSSEY_PLANNER_MAX_FRAMES` | `32` | `frames` 입력에서 한 요청에 보내는 최대 프레임 수 (1~256, 검증기도 같은 값) |
-| `AUDYSSEY_PLANNER_VIDEO_AUDIO` | `false` | `video` 입력에 오디오 트랙 포함 (Gemini, vLLM Qwen-Omni) |
+| `AUDYSSEY_PLANNER_VIDEO_AUDIO` | `false` | `video` 입력에 오디오 트랙 포함 (Gemini, OpenRouter의 Gemini, vLLM Qwen-Omni) |
 | `AUDYSSEY_VALIDATOR_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` / `_INPUT` / `_FPS` / `_VIDEO_AUDIO` | 플래너 값 | 검증기 모델과 입력. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀 |
 
 **흐름과 작업**

@@ -29,7 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-llm = ["openai>=2.29.0"]
+llm = [
+    "google-genai>=3.4.0",
+    "openai>=2.29.0",
+]
 ui = [
     "fastapi>=0.136.1",
     "python-multipart>=0.0.28",

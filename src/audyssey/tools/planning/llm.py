@@ -1,4 +1,9 @@
+import io
+import time
+
 import httpx2
+from google import genai
+from google.genai import types
 from langsmith.wrappers import wrap_openai
 from openai import DefaultHttpxClient, OpenAI
 
@@ -36,18 +41,23 @@ def _require_url(endpoint: LLMEndpoint) -> None:
         )
 
 
-def gemini_client(
-    endpoint: LLMEndpoint, transport: httpx2.BaseTransport | None = None
-) -> httpx2.Client:
-    """Client for Gemini's native REST API; POST models/<model>:generateContent."""
-    _require_url(endpoint)
-    return httpx2.Client(
-        base_url=endpoint.base_url,
-        headers={"x-goog-api-key": endpoint.api_key},
-        # Same as the OpenAI SDK default.
-        timeout=600,
-        transport=_MaskKey(endpoint.api_key, transport or httpx2.HTTPTransport()),
-    )
+def gemini_client(endpoint: LLMEndpoint) -> genai.Client:
+    """Gemini SDK client; the SDK picks Google's endpoint, so base_url is unused."""
+    return genai.Client(api_key=endpoint.api_key)
+
+
+def gemini_upload(client: genai.Client, data: bytes, mime_type: str) -> types.File:
+    """Upload through the Files API and wait until Gemini can read the file."""
+    file = client.files.upload(file=io.BytesIO(data), config={"mime_type": mime_type})
+    # ponytail: fixed 1 s poll capped at 2 min; short planner clips finish in seconds.
+    for _ in range(120):
+        if file.state != types.FileState.PROCESSING or not file.name:
+            break
+        time.sleep(1)
+        file = client.files.get(name=file.name)
+    if file.state != types.FileState.ACTIVE:
+        raise RuntimeError(f"gemini file {file.name} is {file.state}")
+    return file
 
 
 def chat_client(

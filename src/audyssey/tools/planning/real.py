@@ -3,11 +3,14 @@
 import base64
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal, TypeVar, cast
 
+from google import genai
+from google.genai import errors, types
 from langsmith import trace
 from langsmith.run_helpers import tracing_context
 from openai.types.chat import ChatCompletionContentPartParam, ChatCompletionMessageParam
@@ -48,7 +51,7 @@ class _InvalidJSON(RuntimeError):
 
 
 _RETRY = "Return valid JSON matching the schema."
-# Gemini caps an inline request at 20 MB; 512 px clips of a 30 s video are far below.
+# Inline requests cap at 20 MB (Gemini uploads instead); 512 px clips of a 30 s video are far below.
 _MAX_INLINE_B64 = 19_000_000
 
 # Provider-neutral request media: labels, base64 JPEG frames, base64 mp4 clips.
@@ -86,13 +89,16 @@ def _media(
             video, count, tmp / f"frames-{i}", start, end
         ):
             parts += [("text", f"Frame at {time:g} seconds"), ("image", _b64(path))]
-    if sum(len(value) for kind, value in parts if kind == "video") > _MAX_INLINE_B64:
-        # ponytail: inline only; upload through the Files API if clips outgrow 20 MB.
+    inline = endpoint.api != "gemini"
+    if inline and sum(len(v) for k, v in parts if k == "video") > _MAX_INLINE_B64:
         raise RuntimeError("planner video is too large to send inline")
     return parts
 
 
-def _chat(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> _Send:
+@contextmanager
+def _chat(
+    endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]
+) -> Iterator[_Send]:
     content: list[ChatCompletionContentPartParam] = [{"type": "text", "text": text}]
     for kind, value in parts:
         if kind == "text":
@@ -105,7 +111,7 @@ def _chat(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> 
                 }
             )
         else:
-            # vLLM's video_url part; not in the OpenAI SDK types.
+            # video_url (vLLM, OpenRouter); not in the OpenAI SDK types.
             content.append(
                 cast(
                     ChatCompletionContentPartParam,
@@ -116,7 +122,8 @@ def _chat(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> 
                 )
             )
     extra: dict[str, object] = {}
-    if any(kind == "video" for kind, _ in parts):
+    if endpoint.api == "openai" and any(kind == "video" for kind, _ in parts):
+        # vLLM-only fields; OpenRouter takes no fps and Gemini hears the clip's audio.
         # num_frames=-1 lifts vLLM's 32-frame default so fps decides; needs
         # --trust-request-mm-kwargs on the server.
         extra["media_io_kwargs"] = {"video": {"fps": endpoint.fps, "num_frames": -1}}
@@ -149,50 +156,78 @@ def _chat(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> 
             else {},
         )
 
-    return send
+    yield send
 
 
-def _gemini(endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]) -> _Send:
-    contents: list[dict[str, object]] = []
-    for kind, value in parts:
-        if kind == "text":
-            contents.append({"text": value})
-        elif kind == "image":
-            contents.append({"inline_data": {"mime_type": "image/jpeg", "data": value}})
-        else:
-            contents.append(
-                {
-                    "inline_data": {"mime_type": "video/mp4", "data": value},
-                    "video_metadata": {"fps": endpoint.fps},
-                }
-            )
-    contents.append({"text": text})
-    body = {
-        "system_instruction": {"parts": [{"text": system}]},
-        "contents": [{"role": "user", "parts": contents}],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
+@contextmanager
+def _gemini(
+    endpoint: LLMEndpoint, system: str, text: str, parts: list[_Part]
+) -> Iterator[_Send]:
+    """Upload clips through the Files API, send their URIs, delete them after."""
+    uploaded: list[str] = []
+    with llm.gemini_client(endpoint) as client:
+        try:
+            contents: list[types.Part] = []
+            for kind, value in parts:
+                if kind == "text":
+                    contents.append(types.Part(text=value))
+                elif kind == "image":
+                    contents.append(
+                        types.Part.from_bytes(
+                            data=base64.b64decode(value), mime_type="image/jpeg"
+                        )
+                    )
+                else:
+                    file = llm.gemini_upload(
+                        client, base64.b64decode(value), "video/mp4"
+                    )
+                    uploaded.append(file.name or "")
+                    contents.append(
+                        types.Part(
+                            file_data=types.FileData(
+                                file_uri=file.uri, mime_type="video/mp4"
+                            ),
+                            video_metadata=types.VideoMetadata(fps=endpoint.fps),
+                        )
+                    )
+            yield _gemini_send(client, endpoint, system, text, contents)
+        except errors.APIError as exc:
+            message = f"gemini request failed: {exc}"
+            raise RuntimeError(
+                message.replace(endpoint.api_key or "\0", "***")
+            ) from None
+        finally:
+            for name in filter(None, uploaded):
+                # Files expire after 48 h anyway; a failed delete must not hide the result.
+                with suppress(errors.APIError):
+                    client.files.delete(name=name)
+
+
+def _gemini_send(
+    client: genai.Client,
+    endpoint: LLMEndpoint,
+    system: str,
+    text: str,
+    contents: list[types.Part],
+) -> _Send:
+    contents.append(types.Part(text=text))
+    config = types.GenerateContentConfig(
+        system_instruction=system, response_mime_type="application/json"
+    )
 
     def send(retry: bool) -> tuple[str | None, _Usage]:
         if retry:
-            contents.append({"text": _RETRY})
-        with llm.gemini_client(endpoint) as client:
-            response = client.post(
-                f"models/{endpoint.model}:generateContent", json=body
-            )
-            if not response.is_success:
-                raise RuntimeError(
-                    f"gemini request failed: {response.status_code} {response.text[:500]}"
-                )
-            data = response.json()
-        candidates = data.get("candidates") or [{}]
-        content = candidates[0].get("content") or {}
-        raw = "".join(part.get("text", "") for part in content.get("parts") or [])
-        meta = data.get("usageMetadata") or {}
-        return raw or None, {
-            "input_tokens": meta.get("promptTokenCount", 0),
-            "output_tokens": meta.get("candidatesTokenCount", 0),
-            "total_tokens": meta.get("totalTokenCount", 0),
+            contents.append(types.Part(text=_RETRY))
+        response = client.models.generate_content(
+            model=endpoint.model,
+            contents=types.Content(role="user", parts=contents),
+            config=config,
+        )
+        meta = response.usage_metadata
+        return response.text or None, {
+            "input_tokens": meta.prompt_token_count or 0,
+            "output_tokens": meta.candidates_token_count or 0,
+            "total_tokens": meta.total_token_count or 0,
         } if meta else {}
 
     return send
@@ -206,46 +241,46 @@ def _request(
     response_type: type[_Response],
 ) -> _Response:
     backend = _gemini if endpoint.api == "gemini" else _chat
-    send = backend(endpoint, system, text, parts)
     record = job_trace.current()
     sent = _keep_media(record, parts) if record else []
     raw = None
-    for attempt in range(2):
-        # Record model/usage only: the SDK wrapper would also trace media bytes.
-        with trace(
-            "planner_completion",
-            run_type="llm",
-            inputs={"model": endpoint.model},
-            metadata={"ls_model_name": endpoint.model, "ls_model_type": "chat"},
-        ) as run:
-            with tracing_context(enabled=False, parent=False):
-                raw, usage = send(attempt > 0)
-            run.end(outputs={"usage_metadata": usage} if usage else {})
-        if record:
-            record.requests.append(
-                {
-                    "model": endpoint.model,
-                    "api": endpoint.api,
-                    "input": endpoint.input,
-                    "fps": endpoint.fps,
-                    "audio": endpoint.video_audio,
-                    "attempt": attempt + 1,
-                    "system": system,
-                    "text": text + ("\n" + _RETRY if attempt else ""),
-                    "media": sent,
-                    "raw": raw,
-                    "usage": usage,
-                }
-            )
-        try:
-            data = json.loads(raw or "")
-            if isinstance(data, list) and len(response_type.model_fields) == 1:
-                # Gemini sometimes drops the {"sources": [...]} wrapper.
-                (field,) = response_type.model_fields
-                data = {field: data}
-            return response_type.model_validate(data)
-        except (json.JSONDecodeError, ValidationError):
-            continue
+    with backend(endpoint, system, text, parts) as send:
+        for attempt in range(2):
+            # Record model/usage only: the SDK wrapper would also trace media bytes.
+            with trace(
+                "planner_completion",
+                run_type="llm",
+                inputs={"model": endpoint.model},
+                metadata={"ls_model_name": endpoint.model, "ls_model_type": "chat"},
+            ) as run:
+                with tracing_context(enabled=False, parent=False):
+                    raw, usage = send(attempt > 0)
+                run.end(outputs={"usage_metadata": usage} if usage else {})
+            if record:
+                record.requests.append(
+                    {
+                        "model": endpoint.model,
+                        "api": endpoint.api,
+                        "input": endpoint.input,
+                        "fps": endpoint.fps,
+                        "audio": endpoint.video_audio,
+                        "attempt": attempt + 1,
+                        "system": system,
+                        "text": text + ("\n" + _RETRY if attempt else ""),
+                        "media": sent,
+                        "raw": raw,
+                        "usage": usage,
+                    }
+                )
+            try:
+                data = json.loads(raw or "")
+                if isinstance(data, list) and len(response_type.model_fields) == 1:
+                    # Gemini sometimes drops the {"sources": [...]} wrapper.
+                    (field,) = response_type.model_fields
+                    data = {field: data}
+                return response_type.model_validate(data)
+            except (json.JSONDecodeError, ValidationError):
+                continue
     excerpt = raw or ""
     if endpoint.api_key:
         excerpt = excerpt.replace(endpoint.api_key, "***")
