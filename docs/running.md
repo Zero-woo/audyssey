@@ -420,7 +420,7 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 |---|---|---|
 | `AUDYSSEY_MAX_PLAN_ROUNDS` | `2` | 플래닝 최대 횟수 |
 | `AUDYSSEY_MAX_SEPARATION_RETRIES` | `2` | 소스마다 다시 분리하는 횟수 (총 시도 = 1 + 이 값) |
-| `AUDYSSEY_JUDGE_PASS_THRESHOLD` | `0.5` | Judge overall 합격 기준 (아직 보정 전) |
+| `AUDYSSEY_JUDGE_PASS_THRESHOLD` | `0.5` | Judge overall 합격 기준 (아직 보정 전). 앱이 판정 서버가 돌려준 점수로 판정하므로 **앱의 값**이 쓰임 |
 | `AUDYSSEY_MAX_DURATION_S` | `30` | 업로드 영상 길이 상한(초) |
 | `AUDYSSEY_MAX_UPLOAD_MB` | `200` | 업로드 파일 크기 상한. main과 도구 서버 모두 적용, 넘으면 413 |
 | `AUDYSSEY_WORK_DIR` | `work/jobs` | 작업 폴더 |
@@ -449,7 +449,7 @@ Compose에서만 쓰는 값(`.env`): `AUDYSSEY_IMAGE_TAG`(이미지 태그, 비�
 | `AUDYSSEY_GENERATOR` / `AUDYSSEY_GENERATOR_URL` | `stub` / 빈 값 | 생성과 채점 도구. `stub`, `real`, `remote`. Compose 기본 `remote` / `http://generation:8700`, remote는 URL 필수 |
 | `AUDYSSEY_GEN_SEED` | `42` | 첫 생성 seed. 다시 생성할 때 누적 attempts로 증가 |
 | `AUDYSSEY_MAX_GENERATION_RETRIES` | `2` | 루프마다 최대 재시도 수(0 이상). 총 시도는 1 + 이 값 |
-| `AUDYSSEY_GENERATION_MARGIN_THRESHOLD` | `0.0` | 텍스트 TargetSel 합격 임계값. 보정 전(stub은 진폭으로 판정) |
+| `AUDYSSEY_GENERATION_MARGIN_THRESHOLD` | `0.0` | 텍스트 TargetSel 합격 임계값. 보정 전(stub은 진폭으로 판정). 앱이 생성 서버가 돌려준 점수로 판정하므로 **앱의 값**이 쓰임. 비교할 다른 소스가 없으면 적용하지 않음 |
 | `AUDYSSEY_GEN_BASE_MODEL` | `jnwnlee/SelVA` | 공개 베이스 저장소 |
 | `AUDYSSEY_GEN_MODEL` | `sogang-audyssey/internal-model` | 비공개 내부 모델 저장소 |
 | `AUDYSSEY_GEN_GENERATOR_FILE` | `generator/S_O_s43/model_ema_step1000.pth` | 내부 모델 생성기 파일 |
