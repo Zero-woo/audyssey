@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-Api = Literal["openai", "gemini"]
+Api = Literal["openai", "gemini", "openrouter"]
 Input = Literal["frames", "video"]
 
 

@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 import httpx2
+from google import genai
+from google.genai import types
 
 from audyssey.contracts import PlanIssue, SourcePlan
 from audyssey.tools.planning import real
@@ -182,56 +185,87 @@ class PlannerRealTests(unittest.TestCase):
                 self.assertEqual("audio track" in request["messages"][0]["content"], audio)
 
     def respond_gemini(self, request):
-        self.requests.append({"url": str(request.url), "key": request.headers.get("x-goog-api-key"),
-                              **json.loads(request.content)})
-        return httpx2.Response(200, json={
-            "candidates": [{"content": {"parts": [{"text": self.responses.pop(0)}]}}],
+        url = str(request.url)
+        self.gemini_calls.append((request.method, url, request.headers.get("x-goog-api-key")))
+        if request.method == "DELETE":
+            return httpx.Response(200, json={})
+        if "/upload/" in url and url.endswith("/files"):
+            self.uploads.append(dict(request.headers))
+            return httpx.Response(200, headers={"x-goog-upload-url": "https://gemini.test/upload/session-1"})
+        if url.endswith("/upload/session-1"):
+            self.uploaded.append(request.content)
+            return httpx.Response(200, headers={"x-goog-upload-status": "final"}, json={"file": {
+                "name": "files/abc", "uri": "https://gemini.test/v1beta/files/abc", "state": "PROCESSING"}})
+        if url.endswith("/files/abc"):
+            return httpx.Response(200, json={
+                "name": "files/abc", "uri": "https://gemini.test/v1beta/files/abc", "state": "ACTIVE"})
+        self.requests.append({"url": url, **json.loads(request.content)})
+        return httpx.Response(200, json={
+            "candidates": [{"content": {"role": "model", "parts": [{"text": self.responses.pop(0)}]}}],
             "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 5, "totalTokenCount": 8},
         })
 
-    def test_gemini_api_sends_native_video_request(self):
-        from audyssey.tools.planning.llm import gemini_client
-
-        calls = self.clip()
-        client = patch("audyssey.tools.planning.llm.gemini_client", side_effect=lambda settings: gemini_client(
-            settings, transport=httpx2.MockTransport(self.respond_gemini)
+    def gemini(self, respond):
+        """Real SDK, fake network: the SDK serializes uploads and requests itself."""
+        self.gemini_calls, self.uploads, self.uploaded = [], [], []
+        return patch("audyssey.tools.planning.llm.gemini_client", side_effect=lambda endpoint: genai.Client(
+            api_key=endpoint.api_key,
+            http_options=types.HttpOptions(httpx_client=httpx.Client(transport=httpx.MockTransport(respond))),
         ))
+
+    def test_gemini_api_uploads_video_and_sends_its_uri(self):
+        calls = self.clip()
         env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video",
-               "AUDYSSEY_PLANNER_BASE_URL": "https://gemini.test/v1beta",
                "AUDYSSEY_PLANNER_FPS": "3", "AUDYSSEY_PLANNER_VIDEO_AUDIO": "true"}
-        with client, patch.dict(os.environ, env):
+        with self.gemini(self.respond_gemini), patch.dict(os.environ, env), patch("time.sleep"):
             self.responses = ["broken", json.dumps({"sources": [self.source()]})]
             result = real.plan(self.video, self.audio, 2, [])
         self.assertEqual([p.name for p in result], ["person"])
         self.assertEqual(calls, [True])
+        # One upload serves both attempts, is polled until active and deleted afterwards.
+        self.assertEqual(self.uploaded, [b"clip-bytes"])
+        self.assertEqual(self.uploads[0]["x-goog-upload-header-content-type"], "video/mp4")
+        # The upload session URL is pre-authorized; every API call carries the key.
+        self.assertTrue(all(key == "fake-key" for _, u, key in self.gemini_calls if "session-1" not in u))
+        self.assertEqual([m for m, u, _ in self.gemini_calls if u.endswith("/files/abc")], ["GET", "DELETE"])
         first, second = self.requests
-        self.assertEqual(first["url"], "https://gemini.test/v1beta/models/fake-model:generateContent")
-        self.assertEqual(first["key"], "fake-key")
+        self.assertTrue(first["url"].endswith("/models/fake-model:generateContent"))
         label, video, text = first["contents"][0]["parts"]
         self.assertEqual(label, {"text": "Video from 0 to 2 seconds"})
         self.assertEqual(video, {
-            "inline_data": {"mime_type": "video/mp4", "data": base64.b64encode(b"clip-bytes").decode()},
-            "video_metadata": {"fps": 3.0},
+            "fileData": {"mime_type": "video/mp4", "file_uri": "https://gemini.test/v1beta/files/abc"},
+            "videoMetadata": {"fps": 3.0},
         })
         self.assertIn("Video duration: 2 seconds", text["text"])
-        self.assertIn("audio track", first["system_instruction"]["parts"][0]["text"])
+        self.assertIn("audio track", first["systemInstruction"]["parts"][0]["text"])
         self.assertEqual(first["generationConfig"], {"responseMimeType": "application/json"})
         self.assertEqual(second["contents"][0]["parts"][-1], {"text": "Return valid JSON matching the schema."})
 
     def test_gemini_api_error_masks_key(self):
-        from audyssey.tools.planning.llm import gemini_client
-
         self.clip()
-        client = patch("audyssey.tools.planning.llm.gemini_client", side_effect=lambda settings: gemini_client(
-            settings, transport=httpx2.MockTransport(lambda request: httpx2.Response(400, text="bad key fake-key"))
-        ))
-        env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video",
-               "AUDYSSEY_PLANNER_BASE_URL": "https://gemini.test/v1beta"}
-        with client, patch.dict(os.environ, env):
+        env = {"AUDYSSEY_PLANNER_API": "gemini", "AUDYSSEY_PLANNER_INPUT": "video"}
+        def bad(request):
+            return httpx.Response(400, json={"error": {"code": 400, "message": "bad key fake-key"}})
+
+        with self.gemini(bad), patch.dict(os.environ, env):
             with self.assertRaisesRegex(RuntimeError, "400") as caught:
                 real.plan(self.video, self.audio, 2, [])
         self.assertNotIn("fake-key", str(caught.exception))
         self.assertIn("***", str(caught.exception))
+
+    def test_openrouter_sends_video_without_vllm_fields(self):
+        calls = self.clip()
+        env = {"AUDYSSEY_PLANNER_API": "openrouter", "AUDYSSEY_PLANNER_INPUT": "video",
+               "AUDYSSEY_PLANNER_VIDEO_AUDIO": "true"}
+        with patch.dict(os.environ, env):
+            self.plan([self.source()])
+        request = self.requests[0]
+        parts = request["messages"][1]["content"]
+        self.assertEqual([p["type"] for p in parts], ["text", "text", "video_url"])
+        self.assertNotIn("media_io_kwargs", request)
+        self.assertNotIn("mm_processor_kwargs", request)
+        self.assertEqual(calls, [True])
+        self.assertIn("audio track", request["messages"][0]["content"])
 
     def visible(self, **updates):
         hint = {"time": 1, "box": [0.1, 0.1, 0.5, 0.5], "description": "person"}
