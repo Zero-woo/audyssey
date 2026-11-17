@@ -171,6 +171,9 @@ Pod에서는 tools 이미지 하나가 도구 4개(분리·Judge·그라운딩·
 | main 로그에 401 | main과 도구 서버의 `AUDYSSEY_TOOL_TOKEN`이 다름 |
 | 업로드가 400 | 영상이 30초를 넘거나 비디오 스트림이 없음 |
 | 작업 폴더 쓰기 권한 오류 | 예전 root 이미지로 만든 볼륨. `docker compose down && docker volume rm audyssey_jobs` 후 다시 띄움 |
+| `AUDYSSEY_PLANNER_API=openrouter`로 바꾼 뒤 main이 안 뜸 | `c0ee48e` 이전 이미지는 `openrouter` 값을 모름. 새 이미지를 받거나 `AUDYSSEY_IMAGE_TAG`를 그 뒤 커밋으로 |
+| 플래너는 되는데 검수기만 실패, 로그에 `API key not valid` | 검수기 방식을 바꾸면서 vLLM용 `AUDYSSEY_VALIDATOR_API_KEY=unused`가 남음. 키를 같이 바꾸거나 지워서 플래너 키를 쓰게 함 |
+| 화면 서버 상태에서 OpenRouter가 응답 없음 | 키가 틀렸거나 만료됨(`/key` 조회 실패). LLM 서버가 응답 없음이면 `BASE_URL`과 키 확인 |
 
 ### Compose 세부
 

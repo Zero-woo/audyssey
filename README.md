@@ -62,7 +62,7 @@ flowchart LR
   subgraph MAIN["main 서버 (audyssey-app, GPU 불필요)"]
     GRAPH["처리 흐름 · 명령 처리"] --- STORE[("작업 파일")]
   end
-  MAIN -- "OpenAI 호환 API" --> LLM["플래너 LLM<br/>Gemini 또는 vLLM"]
+  MAIN -- "LLM API" --> LLM["플래너·검수기 LLM<br/>Gemini, OpenRouter 또는 vLLM"]
   MAIN -- "HTTP + 토큰 :8700" --> TOOLS
   subgraph TOOLS["도구 서버 (audyssey-tools, GPU)"]
     T1["분리<br/>SAM Audio"]
@@ -91,7 +91,7 @@ flowchart LR
 | 개인 GPU 서버에서 실행 | Docker, NVIDIA Container Toolkit, GPU 1장(80GB면 한 장으로 충분) | [A. 내 GPU 서버](docs/running.md#a-내-gpu-서버에서-docker-compose) |
 | 노트북과 RunPod로 실행 | 노트북 Docker, RunPod Pod 1개(48GB 이상), 네트워크 볼륨 | [B. 노트북 + RunPod](docs/running.md#b-노트북--runpod) |
 | 담당 모듈만 GPU로 개발 | GPU, `gpu/` 환경 | [모듈 개발](docs/running.md#내-모듈만-gpu로-개발) |
-| 플래너 연결 | Gemini API 키 또는 vLLM 주소 | [플래너 연결](docs/running.md#플래너-연결-gemini-vllm) |
+| 플래너 연결 | Gemini API 키, OpenRouter 키 또는 vLLM 주소 | [플래너 연결](docs/running.md#플래너-연결-gemini-vllm) |
 | 실행 기록 확인 | LangSmith 키 | [LangSmith](docs/running.md#langsmith) |
 
 문제가 생기면 [자주 막히는 곳](docs/running.md#자주-막히는-곳)을, 설정 값은 [설정 표](docs/running.md#설정-환경변수)를 참고합니다.
