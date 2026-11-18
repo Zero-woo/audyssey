@@ -3,14 +3,13 @@ import json
 import time
 
 import httpx2
-from openai.types.chat import ChatCompletionMessageParam
-from langsmith import tracing_context
-from pydantic import TypeAdapter, ValidationError
-
 from openai.types.chat import (
     ChatCompletionMessageFunctionToolCall,
+    ChatCompletionMessageParam,
     ChatCompletionToolParam,
 )
+from langsmith import tracing_context
+from pydantic import TypeAdapter, ValidationError
 
 from audyssey.contracts import (
     AddSource,
@@ -86,6 +85,8 @@ def _tools() -> list[ChatCompletionToolParam]:
         schema["properties"].pop("type", None)
         if "required" in schema:
             schema["required"] = [r for r in schema["required"] if r != "type"]
+            if not schema["required"]:
+                del schema["required"]
         parameters = _inline(schema, schema.get("$defs", {}))
         parameters.pop("title", None)
         description = " ".join(
@@ -186,8 +187,8 @@ def route(
             ):
                 raise TypeError("model called an unknown tool")
             data = {
-                "type": call.function.name,
                 **json.loads(call.function.arguments or "{}"),
+                "type": call.function.name,
             }
         else:
             if not message.content:

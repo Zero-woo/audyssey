@@ -347,6 +347,10 @@ class ToolsRouterTests(unittest.TestCase):
             self.assertIsNone(routed.error)
             self.assertEqual((routed.input_tokens, routed.output_tokens), (7, 3))
 
+    def test_called_tool_name_decides_the_type(self):
+        self.calls = [("drop", {"type": "keep", "source_id": "s1"})]
+        self.assertEqual(self.route().decision, Drop(source_id="s1"))
+
     def test_bad_responses_are_errors_without_retry(self):
         cases = {
             "text only": ([], "그냥 답변"),
