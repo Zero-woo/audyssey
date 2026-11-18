@@ -334,11 +334,11 @@ def _run_one(
     case: Case,
     job: Job,
     rep: int,
-    cache: Path,
+    cache: Path | None,
 ) -> Run:
-    path = _cache_file(cache, model, case.id, rep)
     hit: dict
-    if path.exists():
+    path = None if cache is None else _cache_file(cache, model, case.id, rep)
+    if path is not None and path.exists():
         hit = json.loads(path.read_text())
     else:
         routed = router(case.request, job)
@@ -348,8 +348,9 @@ def _run_one(
             else routed.decision.model_dump(),
             **{f: getattr(routed, f) for f in _CACHED_FIELDS},
         }
-        cache.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(hit))
+        if cache is not None and path is not None:
+            cache.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(hit))
     decision = None if hit["decision"] is None else parse_decision(hit["decision"])
     return Run(
         case=case,
@@ -413,14 +414,16 @@ def _summary(m: dict, ci: tuple[float, float], runs: list[Run]) -> str:
 def run_eval(
     router: Callable[[str, Job], Routed],
     model: str,
+    router_name: str,
     cases: list[Case],
     fixtures: Path,
     k: int,
     out: Path,
-    cache: Path,
+    cache: Path | None,
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
-    out.mkdir(parents=True)
+    if out.exists():
+        raise FileExistsError(out)
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
         _run_one(router, model, c, jobs[c.fixture], rep, cache)
@@ -428,6 +431,7 @@ def run_eval(
         for rep in range(k)
     ]
     m = metrics(runs)
+    out.mkdir(parents=True)
     sha, version = _descriptions()
     (out / "cases.jsonl").write_text(
         "".join(
@@ -455,7 +459,7 @@ def run_eval(
         json.dumps(
             {
                 "model": model,
-                "router": "stub" if model == "stub" else "real",
+                "router": router_name,
                 "descriptions_version": version,
                 "descriptions_sha256": sha,
                 "git_sha": git_sha(),

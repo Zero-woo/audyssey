@@ -146,3 +146,23 @@ class EvalRoutingCliTests(unittest.TestCase):
             result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
             self.assertEqual(result.exit_code, 1, result.output)
             self.assertEqual(len(log.read_text().splitlines()), 3)
+
+    def test_crashed_test_run_is_not_counted(self):
+        import tempfile
+        from pathlib import Path
+        calls = []
+        def boom(request, job):
+            calls.append(1)
+            if len(calls) == 2:
+                raise RuntimeError("network")
+            from audyssey.contracts import parse_decision
+            from audyssey.tools.routing import Routed
+            return Routed(parse_decision({"type": "none"}), None, 1.0, 1, 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            path = Path(tmp) / "cases.jsonl"
+            path.write_text(path.read_text().replace('"dev"', '"test"'))
+            result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=boom)
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertFalse((Path(tmp) / "out").exists())
+            self.assertFalse((Path(tmp) / "test_opens.jsonl").exists())

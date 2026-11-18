@@ -102,16 +102,26 @@ def eval_routing(
             opens = log.read_text().splitlines() if log.exists() else []
             if len(opens) >= MAX_TEST_OPENS:
                 raise fail(f"the test split was already opened {MAX_TEST_OPENS} times")
-            entry = {
-                "date": datetime.now(UTC).isoformat(),
-                "model": model,
-                "git_sha": git_sha(),
-                "out": str(out),
-            }
-            log.write_text(
-                "".join(f"{line}\n" for line in opens) + json.dumps(entry) + "\n"
-            )
-    run_eval(load_router(settings), model, selected, fixtures, k, out, cache)
+    run_eval(
+        load_router(settings),
+        model,
+        router,
+        selected,
+        fixtures,
+        k,
+        out,
+        cache if router == "real" else None,
+    )
+    if router == "real" and split == "test":
+        entry = {
+            "date": datetime.now(UTC).isoformat(),
+            "model": model,
+            "git_sha": git_sha(),
+            "out": str(out),
+        }
+        log.write_text(
+            "".join(f"{line}\n" for line in opens) + json.dumps(entry) + "\n"
+        )
     typer.echo(f"wrote {out}")
 
 

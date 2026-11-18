@@ -382,8 +382,7 @@ class RunEvalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             _, cases = setup_eval(tmp)
-            result = run_eval(
-                stub.route, "stub", cases, tmp / "fixtures", 2, tmp / "out", tmp / "cache"
+            result = run_eval(stub.route, "stub", "stub", cases, tmp / "fixtures", 2, tmp / "out", tmp / "cache"
             )
             self.assertEqual(result["runs"], 6)
             for name in ("cases.jsonl", "summary.md", "config.json"):
@@ -406,11 +405,11 @@ class RunEvalTests(unittest.TestCase):
             tmp = Path(d)
             _, cases = setup_eval(tmp)
             router = CountingRouter()
-            run_eval(router, "m", cases, tmp / "fixtures", 2, tmp / "o1", tmp / "cache")
+            run_eval(router, "m", "real", cases, tmp / "fixtures", 2, tmp / "o1", tmp / "cache")
             self.assertEqual(router.calls, 6)
-            run_eval(router, "m", cases, tmp / "fixtures", 2, tmp / "o2", tmp / "cache")
+            run_eval(router, "m", "real", cases, tmp / "fixtures", 2, tmp / "o2", tmp / "cache")
             self.assertEqual(router.calls, 6)
-            run_eval(router, "m2", cases, tmp / "fixtures", 1, tmp / "o3", tmp / "cache")
+            run_eval(router, "m2", "real", cases, tmp / "fixtures", 1, tmp / "o3", tmp / "cache")
             self.assertEqual(router.calls, 9)
 
     def test_schema_error_is_cached(self) -> None:
@@ -424,7 +423,7 @@ class RunEvalTests(unittest.TestCase):
             tmp = Path(d)
             _, cases = setup_eval(tmp, 1)
             for out in ("o1", "o2"):
-                result = run_eval(bad, "m", cases, tmp / "fixtures", 1, tmp / out, tmp / "cache")
+                result = run_eval(bad, "m", "real", cases, tmp / "fixtures", 1, tmp / out, tmp / "cache")
             self.assertEqual(len(calls), 1)
             self.assertEqual(result["invalid_rate"], 1.0)
 
@@ -435,7 +434,7 @@ class RunEvalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             _, cases = setup_eval(tmp, 1)
-            result = run_eval(route, "m", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+            result = run_eval(route, "m", "real", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
             self.assertEqual(result["invalid_rate"], 1.0)
             row = json.loads((tmp / "out" / "cases.jsonl").read_text())
             self.assertTrue(row["invalid"])
@@ -447,8 +446,35 @@ class RunEvalTests(unittest.TestCase):
             (tmp / "out").mkdir()
             router = CountingRouter()
             with self.assertRaises(FileExistsError):
-                run_eval(router, "m", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+                run_eval(router, "m", "real", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
             self.assertEqual(router.calls, 0)
+
+    def test_crash_leaves_no_out_and_resumes(self) -> None:
+        router = CountingRouter()
+
+        def flaky(request: str, job: Job) -> Routed:
+            if router.calls == 1:
+                raise RuntimeError("network")
+            return router(request, job)
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp)
+            with self.assertRaises(RuntimeError):
+                run_eval(flaky, "m", "real", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+            self.assertFalse((tmp / "out").exists())
+            run_eval(router, "m", "real", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+            self.assertEqual(router.calls, 3)
+
+    def test_no_cache_calls_router_every_time(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            router = CountingRouter()
+            for out in ("o1", "o2"):
+                run_eval(router, "m", "stub", cases, tmp / "fixtures", 1, tmp / out, None)
+            self.assertEqual(router.calls, 2)
+            self.assertFalse((tmp / "cache").exists())
 
 
 if __name__ == "__main__":
