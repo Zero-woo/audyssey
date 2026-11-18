@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+from pydantic import ValidationError
 import uvicorn
 
 from audyssey.api import create_app
@@ -88,11 +89,20 @@ def eval_routing(
     selected = [c for c in all_cases if c.split == split]
     if not selected:
         raise fail(f"no cases in split {split}")
-    settings = Settings().model_copy(update={"router": router})
+    # Unguarded: run_eval applies --guard after the cache read. Built through
+    # the constructor so the Settings validators run.
+    try:
+        settings = Settings(router=router, router_guard=False)
+    except ValidationError as exc:
+        # The message only: the full error echoes the input, which can hold keys.
+        raise fail(exc.errors()[0]["msg"]) from None
     model = model_name(settings)
+    effort = settings.router_reasoning_effort
     cache = cases.parent / "cache"
     if router != "stub":
-        calls = uncached_calls(model, selected, k, cache, settings.router_format)
+        calls = uncached_calls(
+            model, selected, k, cache, settings.router_format, effort
+        )
         if not yes:
             raise fail(
                 f"{calls} uncached calls, about {calls * INPUT_TOKENS_PER_CALL} "
@@ -118,6 +128,7 @@ def eval_routing(
         cache if router != "stub" else None,
         settings.router_format,
         guard,
+        effort,
     )
     if router != "stub" and split == "test":
         entry = {
@@ -126,9 +137,8 @@ def eval_routing(
             "git_sha": git_sha(),
             "out": str(out),
         }
-        log.write_text(
-            "".join(f"{line}\n" for line in opens) + json.dumps(entry) + "\n"
-        )
+        with log.open("a") as f:
+            f.write(json.dumps(entry) + "\n")
     typer.echo(f"wrote {out}")
 
 

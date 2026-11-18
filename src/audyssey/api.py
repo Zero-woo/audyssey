@@ -135,7 +135,11 @@ def create_app(
         if not request.strip():
             raise HTTPException(422, "request is empty")
         job = load(job_id)
-        routed = route(request, job)
+        try:
+            routed = route(request, job)
+        except Exception:
+            # No exception text: provider error bodies can carry the request.
+            raise HTTPException(502, "router returned an invalid decision") from None
         if routed.decision is None:
             raise HTTPException(502, "router returned an invalid decision")
         return {"route_id": uuid4().hex, "decision": routed.decision.model_dump()}

@@ -356,6 +356,19 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertNotIn("secret", response.text)
 
+    def test_route_exception_is_502_without_exception_text(self):
+        def broken(request, job):
+            raise RuntimeError("provider body secret")
+
+        app = create_app(Settings(work_dir=self.root / "jobs"), router=broken)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        response = client.post(f"/api/jobs/{job_id}/route", json={"request": "dog 꺼줘"})
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("secret", response.text)
+
     def test_route_works_while_job_is_busy(self):
         job_id = self.upload()
         self.wait(job_id, "new")

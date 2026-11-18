@@ -465,6 +465,17 @@ class RunEvalTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(result["invalid_rate"], 1.0)
 
+    def test_router_exception_is_not_cached(self) -> None:
+        def down(request: str, job: Job) -> Routed:
+            raise ConnectionError("down")
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            with self.assertRaises(ConnectionError):
+                run_eval(down, "m", "real", cases, tmp / "fixtures", 1, tmp / "o1", tmp / "cache")
+            self.assertEqual(list((tmp / "cache").glob("*.json")), [])
+
     def test_invalid_command_is_flagged(self) -> None:
         def route(request: str, job: Job) -> Routed:
             return Routed(parse_decision({"type": "drop", "source_id": "nope"}), None, 1.0, 5, 1)

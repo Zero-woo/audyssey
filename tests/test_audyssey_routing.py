@@ -401,6 +401,18 @@ class CacheKeyTests(unittest.TestCase):
             _cache_file(root, "m", "c1", 0, "tools"),
         )
 
+    def test_cache_key_differs_between_reasoning_efforts(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+
+        root = Path("cache")
+        keys = {
+            _cache_file(root, "m", "c1", 0, "tools", effort)
+            for effort in (None, "none", "low")
+        }
+        self.assertEqual(len(keys), 3)
+
 def routed(decision) -> Routed:
     return Routed(decision, None, 7.0, 11, 3)
 
@@ -619,7 +631,7 @@ class HybridTests(unittest.TestCase):
         assert routed.error is not None
 
     def test_decision_server_failure_is_an_error_without_retry(self):
-        for status, body in [(500, b"boom"), (200, b"not json"), (200, b"{}")]:
+        for status, body in [(200, b"not json"), (200, b"{}")]:
             with self.subTest(status=status, body=body):
                 self.decision_requests.clear()
                 self.decision_status, self.decision_body = status, body
@@ -628,6 +640,19 @@ class HybridTests(unittest.TestCase):
                 self.assertEqual(routed.error, "decision server failed")
                 self.assertEqual(len(self.decision_requests), 1)
         self.assertEqual(self.llm_requests, [])
+
+    def test_transport_failure_propagates(self):
+        self.decision_status, self.decision_body = 500, b"boom"
+        with self.assertRaises(httpx2.HTTPError):
+            self.route()
+
+    def test_non_string_choice_is_an_error(self):
+        for choice, target in [(["keep"], "s1"), ("keep", 3)]:
+            with self.subTest(choice=choice, target=target):
+                self.choice, self.target = choice, target
+                routed = self.route()
+                self.assertIsNone(routed.decision)
+                self.assertEqual(routed.error, "decision server failed")
 
     def test_latency_and_tokens_are_summed(self):
         routed = self.route()
