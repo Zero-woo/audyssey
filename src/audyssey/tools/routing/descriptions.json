@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "commands": {
+    "keep": {
+      "when": "끈 소스를 다시 켜서 최종 믹스에 넣고 싶을 때 씁니다. \"다시 켜줘\", \"살려줘\", \"되돌려줘\"처럼 소스를 복구하는 요청이 해당합니다. 소스의 gain과 pitch는 그대로 유지됩니다. residual(id \"residual\")에도 쓸 수 있습니다.",
+      "instead": "소리를 끄는 요청은 drop을 씁니다. 크기를 바꾸는 요청은 set_gain을 씁니다.",
+      "params": "source_id는 소스 id 또는 \"residual\"입니다.",
+      "examples": [
+        "\"개 소리 다시 켜줘\" -> {\"type\":\"keep\",\"source_id\":\"s1\"}"
+      ]
+    },
+    "drop": {
+      "when": "소스를 최종 믹스에서 빼고 싶을 때 씁니다. \"꺼줘\", \"없애줘\", \"빼줘\", \"제거해줘\"가 해당합니다. 소스는 삭제되지 않고 껐다가 keep으로 다시 켤 수 있습니다. residual에도 쓸 수 있습니다.",
+      "instead": "소리를 줄이기만 하는 요청은 set_gain을 씁니다. 소스를 지우고 다시 만드는 요청은 generate를 씁니다.",
+      "params": "source_id는 소스 id 또는 \"residual\"입니다.",
+      "examples": [
+        "\"차 소리 빼줘\" -> {\"type\":\"drop\",\"source_id\":\"s2\"}"
+      ]
+    },
+    "set_gain": {
+      "when": "소스의 소리 크기를 바꾸고 싶을 때 씁니다. \"키워줘\", \"줄여줘\", \"작게\", \"두 배로\"처럼 크기를 조절하는 요청이 해당합니다. 값은 현재 gain에 대한 배수로 계산한 절대 gain으로 적습니다. residual에도 쓸 수 있습니다.",
+      "instead": "완전히 끄는 요청은 drop을 씁니다. 음높이를 바꾸는 요청은 set_pitch를 씁니다.",
+      "params": "gain은 0~2이고 1이 원래 크기입니다. \"반으로\"는 현재 gain의 0.5배, \"두 배로\"는 2배이며 2를 넘으면 2로 제한합니다. 정도 표현이 없으면 clarify를 씁니다.",
+      "examples": [
+        "gain 0.8인 s1, \"반으로 줄여줘\" -> {\"type\":\"set_gain\",\"source_id\":\"s1\",\"gain\":0.4}"
+      ]
+    },
+    "set_pitch": {
+      "when": "소스의 음높이를 바꾸고 싶을 때 씁니다. \"음을 올려줘\", \"한 키 낮게\", \"옥타브 위로\"가 해당합니다. 소리 길이와 크기는 그대로입니다. 현재 pitch에 더하지 않고 절대 값으로 적습니다.",
+      "instead": "크기를 바꾸는 요청은 set_gain을 씁니다. residual에는 쓸 수 없고, residual의 음높이 요청은 지원하지 않는 요청으로 clarify를 씁니다.",
+      "params": "semitones는 -12~12입니다. \"한 키\"는 1 semitone, \"반음\"은 1, \"옥타브\"는 12입니다. 올리면 양수, 내리면 음수입니다.",
+      "examples": [
+        "pitch 0인 s1, \"한 키 올려줘\" -> {\"type\":\"set_pitch\",\"source_id\":\"s1\",\"semitones\":1}"
+      ]
+    },
+    "reseparate": {
+      "when": "분리된 소스가 잘못 잡혔을 때 같은 소스를 다시 분리하고 싶을 때 씁니다. \"다시 분리해줘\", \"다른 소리가 섞였어\", \"더 정확히 뽑아줘\"가 해당합니다. 새 설명이나 구간을 줄 수 있습니다.",
+      "instead": "새 소스를 더하는 요청은 add_source, 소리를 새로 만드는 요청은 generate를 씁니다. residual, 생성된 소스, 무음 영상은 재분리할 수 없어 clarify unsupported를 씁니다.",
+      "params": "description은 소스를 다시 설명하는 짧은 문장입니다. spans는 start, end 초 단위 목록입니다. 둘 다 생략하면 기존 계획으로 다시 분리합니다.",
+      "examples": [
+        "\"개 소리 다시 분리해줘\" -> {\"type\":\"reseparate\",\"source_id\":\"s1\"}"
+      ]
+    },
+    "generate": {
+      "when": "분리된 소스를 지우고 비슷한 소리를 새로 생성해 대체하고 싶을 때 씁니다. \"새로 만들어줘\", \"다른 소리로 바꿔줘\"가 해당합니다. 원본 소스는 꺼지고 생성된 소스가 대신 들어갑니다. 효과음, 음악, 환경음에 쓸 수 있습니다.",
+      "instead": "대사는 생성하지 않으므로 대사를 다시 만들어 달라는 요청은 clarify unsupported를 씁니다. residual에는 쓸 수 없습니다. 소스를 끄기만 하는 요청은 drop을 씁니다.",
+      "params": "description은 생성할 소리의 짧은 설명이고 생략하면 기존 설명을 씁니다.",
+      "examples": [
+        "\"차 소리 새로 만들어줘\" -> {\"type\":\"generate\",\"source_id\":\"s2\"}"
+      ]
+    },
+    "add_source": {
+      "when": "영상에 없는 소리를 새 소스로 추가하고 싶을 때 씁니다. \"박수 소리 넣어줘\"가 해당합니다. 이름, 종류, 설명은 plan에, 뽑을지 만들지는 method에 적습니다.",
+      "instead": "있는 소스를 다시 뽑는 요청은 reseparate, 대체하는 요청은 generate를 씁니다. 대사는 생성하지 않고 무음 영상은 generate만 됩니다.",
+      "params": "plan은 name(기존 소스와 안 겹침), kind(dialogue, sfx, music, ambience), description입니다. method는 separate 또는 generate입니다.",
+      "examples": [
+        "\"박수 추가\" -> {\"type\":\"add_source\",\"plan\":{\"name\":\"clap\",\"kind\":\"sfx\",\"description\":\"clap\"},\"method\":\"generate\"}"
+      ]
+    },
+    "render": {
+      "when": "지금까지의 편집을 반영해 결과를 내보내고 싶을 때 씁니다. \"결과 만들어줘\", \"내보내줘\", \"믹스 완성해줘\"가 해당합니다. 믹스 wav와 영상 mp4를 만들고, 원하면 소스별 stem도 함께 냅니다.",
+      "instead": "소스를 바꾸는 요청은 해당 편집 명령을 씁니다. 편집과 내보내기를 한 번에 요청하면 clarify composite를 씁니다.",
+      "params": "include_residual_stem은 residual stem도 내보낼지이며 기본값은 false입니다. \"잔여 소리도\"라고 하면 true입니다.",
+      "examples": [
+        "\"내보내줘\" -> {\"type\":\"render\"}"
+      ]
+    },
+    "clarify": {
+      "when": "명령을 하나로 정할 수 없을 때 한 문장으로 되묻습니다. ambiguous_target은 대상이 둘 이상이거나 \"왼쪽\"처럼 화면 위치로 가리킬 때, missing_value는 값이 빠졌을 때, composite는 편집이 둘 이상일 때입니다.",
+      "instead": "unsupported는 대사 재생성, 무음 영상 재분리처럼 실행 불가로 알려진 요청입니다. 편집과 무관한 질문은 none입니다. 그 밖은 other입니다.",
+      "params": "question은 사용자에게 보여줄 한 문장이고 요청과 같은 언어입니다. reason은 이 항목에 적은 다섯 값 중 하나입니다.",
+      "examples": [
+        "\"줄여줘\"(소스 둘) -> {\"type\":\"clarify\",\"question\":\"어느 소리요?\",\"reason\":\"ambiguous_target\"}"
+      ]
+    },
+    "none": {
+      "when": "편집 요청이 아닐 때 씁니다. 인사, 영상 내용 질문, 사용법 질문, 편집과 무관한 대화가 해당합니다. 아무 명령도 실행되지 않습니다.",
+      "instead": "편집 의도가 있지만 부족하거나 모호하면 clarify를 씁니다. 지원하지 않는 편집은 clarify unsupported를 씁니다.",
+      "params": "다른 필드는 없고 type만 \"none\"입니다.",
+      "examples": [
+        "\"이 영상 몇 분이야?\" -> {\"type\":\"none\"}"
+      ]
+    }
+  }
+}

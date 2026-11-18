@@ -305,6 +305,7 @@ cython_debug/
 .agents/
 *.json
 !/langgraph.json
+!/src/audyssey/tools/routing/descriptions.json
 .langgraph_api/
 
 # Local benchmark media and outputs

@@ -43,4 +43,6 @@ def summarize(job: Job) -> dict:
 def load_router(settings: Settings) -> Callable[[str, Job], Routed]:
     if settings.router == "stub":
         return import_module("audyssey.tools.routing.stub").route
-    raise ValueError(f"router {settings.router!r} is not available yet")
+    route = import_module("audyssey.tools.routing.real").route
+    endpoint = settings.router_endpoint()
+    return lambda request, job: route(request, job, endpoint)

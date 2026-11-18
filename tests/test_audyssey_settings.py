@@ -112,6 +112,26 @@ class SettingsTests(unittest.TestCase):
             Settings(validator_api="gemini")
         Settings(validator_api="gemini", validator_input="video")
 
+    def test_router_endpoint_falls_back_to_planner(self):
+        planner = dict(planner_base_url="http://planner/v1", planner_model="p", planner_api_key="k")
+        settings = Settings(**planner)
+        self.assertEqual(settings.router_endpoint(), settings.planner_endpoint())
+        settings = Settings(router_model="r", router_api="openrouter", **planner)
+        router = settings.router_endpoint()
+        self.assertEqual((router.model, router.api), ("r", "openrouter"))
+        self.assertEqual((router.base_url, router.api_key), ("http://planner/v1", "k"))
+        self.assertEqual(settings.planner_endpoint().model, "p")
+        settings = Settings(router_base_url="http://router/v1", router_api_key="router-secret-key", **planner)
+        router = settings.router_endpoint()
+        self.assertEqual((router.base_url, router.api_key, router.model), ("http://router/v1", "router-secret-key", "p"))
+        self.assertNotIn("router-secret-key", repr(settings))
+
+    def test_real_router_rejects_gemini(self):
+        with self.assertRaisesRegex(ValidationError, "AUDYSSEY_ROUTER_API must be openai or openrouter"):
+            Settings(router="real", router_api="gemini", planner_input="video")
+        Settings(router="stub", router_api="gemini", planner_input="video")
+        Settings(router="real", router_api="openrouter")
+
     def test_planner_input_settings(self):
         settings = Settings()
         self.assertEqual(

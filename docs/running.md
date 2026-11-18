@@ -418,6 +418,12 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 | `AUDYSSEY_PLANNER_VIDEO_AUDIO` | `false` | `video` 입력에 오디오 트랙 포함 (Gemini, OpenRouter의 Gemini, vLLM Qwen-Omni) |
 | `AUDYSSEY_VALIDATOR_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` / `_INPUT` / `_FPS` / `_VIDEO_AUDIO` | 플래너 값 | 검증기 모델과 입력. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀 |
 
+**라우터**
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `AUDYSSEY_ROUTER_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` | 플래너 값 | `AUDYSSEY_ROUTER=real`일 때 쓰는 라우터 모델. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀. API는 `openai` 또는 `openrouter`만 가능(`gemini`면 시작할 때 오류) |
+
 **흐름과 작업**
 
 | 환경변수 | 기본값 | 설명 |
