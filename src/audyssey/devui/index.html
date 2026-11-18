@@ -84,7 +84,8 @@ const clearCard = () => $('route-card').replaceChildren();
 function button(text, onclick) {
   const node = element('button', text); node.type = 'button'; node.onclick = onclick; return node;
 }
-function showCard(decision, requestText) {
+let originalRequest = '';
+function showCard(decision) {
   const card = $('route-card');
   if (decision.type === 'none') {
     card.replaceChildren(element('p', '할 수 없는 요청입니다. 다른 표현으로 다시 입력해 주세요.'));
@@ -94,7 +95,7 @@ function showCard(decision, requestText) {
     const nodes = [element('p', decision.question)];
     if (decision.reason === 'ambiguous_target') {
       const targets = [...job.sources.map(source => [source.plan.name, source.id]), ['나머지 소리', 'residual']];
-      for (const [name, id] of targets) nodes.push(button(`${name} (${id})`, () => route(`${requestText} (대상: ${name}, ${id})`)));
+      for (const [name, id] of targets) nodes.push(button(`${name} (${id})`, () => route(`${originalRequest} (대상: ${name}, ${id})`)));
     }
     card.replaceChildren(...nodes); return;
   }
@@ -116,10 +117,10 @@ async function route(requestText) {
   $('error').textContent = ''; clearCard();
   try {
     const response = await fetch(`/api/jobs/${job.id}/route`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({request:requestText})});
-    const data = await response.json();
     if (response.status === 502) { fail(new Error('라우터 응답 형식이 맞지 않습니다. 다시 시도하세요.')); return; }
+    const data = await response.json();
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
-    showCard(data.decision, requestText);
+    showCard(data.decision);
   } catch (error) { fail(error); }
 }
 function slider(source, title, key, min, max, step, type, field) {
@@ -196,7 +197,7 @@ $('upload').onsubmit = async event => {
   try {
     const data = await request('/api/jobs', {method:'POST', body:new FormData(event.target)});
     if (events) events.close();
-    job = undefined; show(data);
+    job = undefined; originalRequest = ''; clearCard(); show(data);
     events = new EventSource(`/api/jobs/${job.id}/events`);
     // The dev UI keeps the old one-step flow: start as soon as preprocessing ends.
     let started = false;
@@ -218,7 +219,8 @@ $('add').onsubmit = event => {
 };
 $('route').onsubmit = event => {
   event.preventDefault();
-  route(event.target.elements.request.value);
+  originalRequest = event.target.elements.request.value;
+  route(originalRequest);
 };
 $('render').onclick = () => command({type:'render', include_residual_stem:$('residual-stem').checked});
 $('add').querySelector('button').disabled = true;
