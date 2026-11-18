@@ -428,7 +428,7 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 | `AUDYSSEY_ROUTER_DECISION_MODEL` | `h2o-lightning-4b` | 실행 이름과 캐시 키에만 쓰는 결정 모델 이름. 서버로 보내지 않음 |
 | `AUDYSSEY_ROUTER_HYBRID_ESCAPE` | `false` | 켜면 값 채우기 단계에 `clarify(missing_value)` 도구를 함께 줌. 캐시 키가 달라짐 |
 | `AUDYSSEY_ROUTER_GUARD` | `false` | 기본 꺼짐. 켜면 작업이 실행할 수 없는 명령을 되묻기(clarify)로 바꿈 |
-| `AUDYSSEY_ROUTER_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` | 플래너 값 | `AUDYSSEY_ROUTER=real`일 때 쓰는 라우터 모델. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀. API는 `openai` 또는 `openrouter`만 가능(`gemini`면 시작할 때 오류) |
+| `AUDYSSEY_ROUTER_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` | 플래너 값 | `AUDYSSEY_ROUTER=real` 또는 `hybrid`일 때 쓰는 라우터 모델(hybrid에서는 값 채우기 단계). 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀. API는 `openai` 또는 `openrouter`만 가능(`gemini`면 시작할 때 오류) |
 
 **흐름과 작업**
 
