@@ -21,6 +21,11 @@ class SettingsTests(unittest.TestCase):
             (2, 2, 30),
         )
 
+    def test_router_defaults_to_stub_and_reads_env(self):
+        self.assertEqual(Settings().router, "stub")
+        with patch.dict(os.environ, AUDYSSEY_ROUTER="real"):
+            self.assertEqual(Settings().router, "real")
+
     def test_env_override(self):
         with patch.dict(
             os.environ, AUDYSSEY_PLANNER="real", AUDYSSEY_MAX_PLAN_ROUNDS="3"

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUDYSSEY_")
 
     planner: Literal["stub", "real"] = "stub"
+    router: Literal["stub", "real"] = "stub"
     separator: Literal["stub", "real", "remote"] = "stub"
     filter: Literal["stub", "real", "remote"] = "stub"
     grounder: Literal["stub", "real", "remote"] = "stub"

@@ -399,6 +399,7 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `AUDYSSEY_PLANNER` | `stub` | `stub` 또는 `real` (Compose 기본 `real`) |
+| `AUDYSSEY_ROUTER` | `stub` | `stub` 또는 `real`. 자연어 편집 요청을 명령으로 바꾸는 라우터 |
 | `AUDYSSEY_SEPARATOR` / `AUDYSSEY_FILTER` / `AUDYSSEY_GROUNDER` | `stub` | `stub`, `real`, `remote` (Compose 기본 `remote`) |
 | `AUDYSSEY_SEPARATOR_URL` / `AUDYSSEY_FILTER_URL` / `AUDYSSEY_GROUNDING_URL` | 빈 값 | remote 도구 서버 주소. remote인데 비어 있으면 시작할 때 오류 |
 | `AUDYSSEY_TOOL_TOKEN` | 빈 값 | 도구 서버 Bearer 토큰. main과 도구 서버에 같은 값 |
