@@ -1,0 +1,238 @@
+{"id":"c-001","fixture":"F3","request":"원래 개 짖는 소리 다시 켜줘","category":"positive","pair":null,"template":"c-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"c-002","fixture":"F3","request":"처음 개 소리 살려줘요","category":"positive","pair":null,"template":"c-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"c-003","fixture":"F5","request":"개 짖는 소리 다시 넣어줘","category":"positive","pair":null,"template":"c-t02","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"c-004","fixture":"F5","request":"dog barking 다시 들리게 켜주세요","category":"positive","pair":null,"template":"c-t02","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"c-005","fixture":"F1","request":"차 지나가는 소리 꺼줘","category":"positive","pair":null,"template":"c-t03","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"c-006","fixture":"F1","request":"자동차 소리 빼주세요","category":"positive","pair":null,"template":"c-t03","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"c-007","fixture":"F2","request":"새소리 안 들리게 해줘","category":"positive","pair":null,"template":"c-t04","expected":[{"type":"drop","source_id":"s3"}],"split":"dev"}
+{"id":"c-008","fixture":"F2","request":"birds 소리 없애줘 제발","category":"positive","pair":null,"template":"c-t04","expected":[{"type":"drop","source_id":"s3"}],"split":"dev"}
+{"id":"c-009","fixture":"F1","request":"개 짖는 소리 반으로 줄여줘","category":"positive","pair":null,"template":"c-t05","expected":[{"type":"set_gain","source_id":"s1","gain":{"ge":0.4,"le":0.6}}],"split":"test"}
+{"id":"c-010","fixture":"F1","request":"dog volume 반으로 해주세요","category":"positive","pair":null,"template":"c-t05","expected":[{"type":"set_gain","source_id":"s1","gain":{"ge":0.4,"le":0.6}}],"split":"test"}
+{"id":"c-011","fixture":"F1","request":"남자 목소리 두 배로 키워줘","category":"positive","pair":null,"template":"c-t06","expected":[{"type":"set_gain","source_id":"s3","gain":2.0}],"split":"test"}
+{"id":"c-012","fixture":"F1","request":"사람 말소리 2배로 해줘요","category":"positive","pair":null,"template":"c-t06","expected":[{"type":"set_gain","source_id":"s3","gain":2.0}],"split":"test"}
+{"id":"c-013","fixture":"F1","request":"남자 목소리 한 키 올려줘","category":"positive","pair":null,"template":"c-t07","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"dev"}
+{"id":"c-014","fixture":"F1","request":"목소리 피치 한 키만 높여주세요","category":"positive","pair":null,"template":"c-t07","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"dev"}
+{"id":"c-015","fixture":"F1","request":"개 짖는 소리 두 키 내려줘","category":"positive","pair":null,"template":"c-t08","expected":[{"type":"set_pitch","source_id":"s1","semitones":-2}],"split":"train"}
+{"id":"c-016","fixture":"F1","request":"dog barking 피치 2키 낮춰줘요","category":"positive","pair":null,"template":"c-t08","expected":[{"type":"set_pitch","source_id":"s1","semitones":-2}],"split":"train"}
+{"id":"c-017","fixture":"F1","request":"개 짖는 소리 다시 분리해줘","category":"positive","pair":null,"template":"c-t09","expected":[{"type":"reseparate","source_id":"s1"}],"split":"train"}
+{"id":"c-018","fixture":"F1","request":"개소리 원본에서 한번 더 뽑아줘요","category":"positive","pair":null,"template":"c-t09","expected":[{"type":"reseparate","source_id":"s1"}],"split":"train"}
+{"id":"c-019","fixture":"F2","request":"새소리 분리 다시 해줘","category":"positive","pair":null,"template":"c-t10","expected":[{"type":"reseparate","source_id":"s3"}],"split":"test"}
+{"id":"c-020","fixture":"F2","request":"새 지저귀는 소리 원본에서 재추출해주세요","category":"positive","pair":null,"template":"c-t10","expected":[{"type":"reseparate","source_id":"s3"}],"split":"test"}
+{"id":"c-021","fixture":"F1","request":"차 지나가는 소리 새로 만든 걸로 바꿔줘","category":"positive","pair":null,"template":"c-t11","expected":[{"type":"generate","source_id":"s2"}],"split":"dev"}
+{"id":"c-022","fixture":"F1","request":"자동차 소리 생성해서 교체해주세요","category":"positive","pair":null,"template":"c-t11","expected":[{"type":"generate","source_id":"s2"}],"split":"dev"}
+{"id":"c-023","fixture":"F2","request":"큰 개 짖는 소리 새로 생성해줘","category":"positive","pair":null,"template":"c-t12","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"c-024","fixture":"F2","request":"big dog 소리 다른 걸로 만들어서 바꿔줘요","category":"positive","pair":null,"template":"c-t12","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"c-025","fixture":"F1","request":"영상에 나오는 박수 소리 따로 뽑아서 추가해줘","category":"positive","pair":null,"template":"c-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"test"}
+{"id":"c-026","fixture":"F1","request":"오디오 안에 있는 박수 소리 분리해서 넣어줘요","category":"positive","pair":null,"template":"c-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"test"}
+{"id":"c-027","fixture":"F4","request":"빗소리 배경으로 추가해줘","category":"positive","pair":null,"template":"c-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"ambience"}}],"split":"train"}
+{"id":"c-028","fixture":"F4","request":"비 오는 분위기 소리 만들어서 넣어주세요","category":"positive","pair":null,"template":"c-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"ambience"}}],"split":"train"}
+{"id":"c-029","fixture":"F1","request":"이제 내보내줘","category":"positive","pair":null,"template":"c-t15","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-030","fixture":"F1","request":"완성된 걸로 export 해주세요","category":"positive","pair":null,"template":"c-t15","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-031","fixture":"F2","request":"믹스해서 결과물 뽑아줘","category":"positive","pair":null,"template":"c-t16","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-032","fixture":"F2","request":"렌더링 해줘요","category":"positive","pair":null,"template":"c-t16","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-033","fixture":"F1","request":"남자 목소리 한 키 높여줘","category":"near_miss","pair":"set_gain|set_pitch","template":"c-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"train"}
+{"id":"c-034","fixture":"F1","request":"man speaking 반음 올려줘","category":"near_miss","pair":"set_gain|set_pitch","template":"c-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"train"}
+{"id":"c-035","fixture":"F1","request":"목소리 톤 한 키만 높여주세요","category":"near_miss","pair":"set_gain|set_pitch","template":"c-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"train"}
+{"id":"c-036","fixture":"F1","request":"차 소리 빼줘","category":"near_miss","pair":"drop|set_gain","template":"c-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"c-037","fixture":"F1","request":"자동차 소리 안 들리게 해줘","category":"near_miss","pair":"drop|set_gain","template":"c-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"c-038","fixture":"F1","request":"차 지나가는 소리 꺼주세요","category":"near_miss","pair":"drop|set_gain","template":"c-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"c-039","fixture":"F3","request":"원래 개 짖는 소리 다시 살려줘","category":"near_miss","pair":"keep|set_gain","template":"c-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"c-040","fixture":"F3","request":"처음 개 소리 복구해줘요","category":"near_miss","pair":"keep|set_gain","template":"c-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"c-041","fixture":"F3","request":"원본 개 짖음 다시 들리게 켜주세요","category":"near_miss","pair":"keep|set_gain","template":"c-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"c-042","fixture":"F1","request":"개 짖는 소리 원본에서 다시 뽑아줘","category":"near_miss","pair":"reseparate|generate","template":"c-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"c-043","fixture":"F1","request":"개 소리 분리 한 번 더 해줘요","category":"near_miss","pair":"reseparate|generate","template":"c-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"c-044","fixture":"F1","request":"원본 오디오에서 개 짖음 다시 추출해주세요","category":"near_miss","pair":"reseparate|generate","template":"c-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"c-045","fixture":"F1","request":"천둥 효과음 추가해줘","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"c-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"c-046","fixture":"F1","request":"폭죽 터지는 소리 만들어서 넣어줘요","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"c-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"c-047","fixture":"F1","request":"문 닫히는 소리 하나 새로 넣어주세요","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"c-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"c-048","fixture":"F1","request":"결과 내보내줘","category":"near_miss","pair":"render|none","template":"c-t22","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-049","fixture":"F1","request":"지금 믹스 export 해줘","category":"near_miss","pair":"render|none","template":"c-t22","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-050","fixture":"F1","request":"완성본으로 뽑아주세요","category":"near_miss","pair":"render|none","template":"c-t22","expected":[{"type":"render"}],"split":"test"}
+{"id":"c-051","fixture":"F1","request":"나머지 소리 반으로 줄여줘","category":"near_miss","pair":"residual|source","template":"c-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"dev"}
+{"id":"c-052","fixture":"F1","request":"rest 소리 volume 절반으로 해줘요","category":"near_miss","pair":"residual|source","template":"c-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"dev"}
+{"id":"c-053","fixture":"F1","request":"나머지 오디오 절반 볼륨으로 해주세요","category":"near_miss","pair":"residual|source","template":"c-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"dev"}
+{"id":"c-054","fixture":"F1","request":"이 영상 몇 초짜리야?","category":"none","pair":null,"template":"c-t24","expected":[{"type":"none"}],"split":"dev"}
+{"id":"c-055","fixture":"F1","request":"영상 길이가 어떻게 돼요?","category":"none","pair":null,"template":"c-t24","expected":[{"type":"none"}],"split":"dev"}
+{"id":"c-056","fixture":"F1","request":"지금 영상에 어떤 소리들이 있어?","category":"none","pair":null,"template":"c-t24","expected":[{"type":"none"}],"split":"dev"}
+{"id":"c-057","fixture":"F1","request":"안녕 오늘 기분 어때","category":"none","pair":null,"template":"c-t25","expected":[{"type":"none"}],"split":"test"}
+{"id":"c-058","fixture":"F1","request":"고마워 수고했어","category":"none","pair":null,"template":"c-t25","expected":[{"type":"none"}],"split":"test"}
+{"id":"c-059","fixture":"F1","request":"너 이름이 뭐야?","category":"none","pair":null,"template":"c-t25","expected":[{"type":"none"}],"split":"test"}
+{"id":"c-060","fixture":"F1","request":"영상 배속 두 배로 빨리 돌려줘","category":"none","pair":null,"template":"c-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"c-061","fixture":"F1","request":"자막 넣어줘","category":"none","pair":null,"template":"c-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"c-062","fixture":"F1","request":"화면 밝기 좀 올려줘요","category":"none","pair":null,"template":"c-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"c-063","fixture":"F2","request":"개 짖는 소리 반으로 줄여줘","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"c-064","fixture":"F2","request":"dog volume 반으로","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"c-065","fixture":"F2","request":"멍멍이 소리 절반으로 해주세요","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"c-066","fixture":"F1","request":"왼쪽에서 짖는 개 반으로 줄여줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"c-067","fixture":"F1","request":"화면 왼쪽 개 소리 꺼줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"c-068","fixture":"F1","request":"오른쪽에 있는 개 소리만 두 배로","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"c-069","fixture":"F1","request":"남자 목소리 너무 시끄러워","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
+{"id":"c-070","fixture":"F1","request":"목소리 살짝만 줄여주세요","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
+{"id":"c-071","fixture":"F1","request":"남자 목소리 좀 줄여줘","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
+{"id":"c-072","fixture":"F3","request":"여자 목소리 새로 만들어서 바꿔줘","category":"constraint","pair":null,"template":"c-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"c-073","fixture":"F3","request":"woman speaking 생성본으로 교체해주세요","category":"constraint","pair":null,"template":"c-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"c-074","fixture":"F4","request":"발소리 원본에서 다시 뽑아줘","category":"constraint","pair":null,"template":"c-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"c-075","fixture":"F4","request":"발소리 다시 분리해주세요","category":"constraint","pair":null,"template":"c-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"c-076","fixture":"F1","request":"남자 목소리 20키 올려줘","category":"constraint","pair":null,"template":"c-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"test"}
+{"id":"c-077","fixture":"F1","request":"목소리 피치 15 올려주세요","category":"constraint","pair":null,"template":"c-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"test"}
+{"id":"c-078","fixture":"F1","request":"차 소리 줄이고 새소리 추가해","category":"composite","pair":null,"template":"c-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"train"}
+{"id":"c-079","fixture":"F1","request":"자동차 반으로 줄이고 나서 새소리도 넣어줘요","category":"composite","pair":null,"template":"c-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"train"}
+{"id":"c-080","fixture":"F1","request":"개 소리 끄고 남자 목소리 두 배로 해줘","category":"composite","pair":null,"template":"c-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"dev"}
+{"id":"c-081","fixture":"F1","request":"dog 빼고 목소리는 2배로 해주세요","category":"composite","pair":null,"template":"c-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"dev"}
+{"id":"x-001","fixture":"F5","request":"꺼둔 개 짖는 소리 다시 켜줘","category":"positive","pair":null,"template":"x-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"x-002","fixture":"F5","request":"강아지 짖는 소리도 다시 들리게 살려주세요","category":"positive","pair":null,"template":"x-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"x-003","fixture":"F1","request":"나머지 소리는 켜진 상태로 유지해줘","category":"positive","pair":null,"template":"x-t02","expected":[{"type":"keep","source_id":"residual"}],"split":"dev"}
+{"id":"x-004","fixture":"F1","request":"분리하고 남은 소리도 계속 들리게 해주세요","category":"positive","pair":null,"template":"x-t02","expected":[{"type":"keep","source_id":"residual"}],"split":"dev"}
+{"id":"x-005","fixture":"F1","request":"지나가는 자동차 소리 꺼줘","category":"positive","pair":null,"template":"x-t03","expected":[{"type":"drop","source_id":"s2"}],"split":"test"}
+{"id":"x-006","fixture":"F1","request":"차가 지나가는 소리는 믹스에서 빼주세요","category":"positive","pair":null,"template":"x-t03","expected":[{"type":"drop","source_id":"s2"}],"split":"test"}
+{"id":"x-007","fixture":"F4","request":"바람 소리 안 들리게 해줘","category":"positive","pair":null,"template":"x-t04","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"x-008","fixture":"F4","request":"추가한 wind 트랙은 꺼주세요","category":"positive","pair":null,"template":"x-t04","expected":[{"type":"drop","source_id":"s2"}],"split":"train"}
+{"id":"x-009","fixture":"F5","request":"경적 소리 지금보다 두 배로 키워줘","category":"positive","pair":null,"template":"x-t05","expected":[{"type":"set_gain","source_id":"s2","gain":0.6}],"split":"test"}
+{"id":"x-010","fixture":"F5","request":"자동차 경적의 현재 볼륨에 2를 곱해 주세요","category":"positive","pair":null,"template":"x-t05","expected":[{"type":"set_gain","source_id":"s2","gain":0.6}],"split":"test"}
+{"id":"x-012","fixture":"F1","request":"dog volume 지금의 절반 정도로 맞춰주세요","category":"positive","pair":null,"template":"x-t06","expected":[{"type":"set_gain","source_id":"s1","gain":{"ge":0.4,"le":0.6}}],"split":"train"}
+{"id":"x-014","fixture":"F1","request":"남성이 말하는 음성을 반음 높여주세요","category":"positive","pair":null,"template":"x-t07","expected":[{"type":"set_pitch","source_id":"s3","semitones":1}],"split":"train"}
+{"id":"x-015","fixture":"F3","request":"여자 목소리 한 옥타브 내려줘","category":"positive","pair":null,"template":"x-t08","expected":[{"type":"set_pitch","source_id":"s3","semitones":-12}],"split":"dev"}
+{"id":"x-016","fixture":"F3","request":"여성이 말하는 소리 피치를 지금보다 12반음 낮춰주세요","category":"positive","pair":null,"template":"x-t08","expected":[{"type":"set_pitch","source_id":"s3","semitones":-12}],"split":"dev"}
+{"id":"x-017","fixture":"F2","request":"새 지저귀는 소리 원본에서 다시 분리해줘","category":"positive","pair":null,"template":"x-t09","expected":[{"type":"reseparate","source_id":"s3"}],"split":"train"}
+{"id":"x-018","fixture":"F2","request":"새소리 추출을 원래 오디오로 다시 해주세요","category":"positive","pair":null,"template":"x-t09","expected":[{"type":"reseparate","source_id":"s3"}],"split":"train"}
+{"id":"x-019","fixture":"F1","request":"차 지나가는 소리 재분리해줘","category":"positive","pair":null,"template":"x-t10","expected":[{"type":"reseparate","source_id":"s2"}],"split":"train"}
+{"id":"x-020","fixture":"F1","request":"자동차 소리는 원본 음원에서 한 번 더 추출해주세요","category":"positive","pair":null,"template":"x-t10","expected":[{"type":"reseparate","source_id":"s2"}],"split":"train"}
+{"id":"x-021","fixture":"F1","request":"개 짖는 소리를 새로 생성한 짖는 소리로 교체해줘","category":"positive","pair":null,"template":"x-t11","expected":[{"type":"generate","source_id":"s1"}],"split":"test"}
+{"id":"x-022","fixture":"F1","request":"지금 강아지 소리 대신 AI로 만든 낮고 굵은 짖는 소리를 써주세요","category":"positive","pair":null,"template":"x-t11","expected":[{"type":"generate","source_id":"s1"}],"split":"test"}
+{"id":"x-023","fixture":"F5","request":"경적 소리를 새로 생성해서 바꿔줘","category":"positive","pair":null,"template":"x-t12","expected":[{"type":"generate","source_id":"s2"}],"split":"train"}
+{"id":"x-024","fixture":"F5","request":"현재 자동차 경적 대신 짧은 빵 소리를 AI로 만들어 넣어주세요","category":"positive","pair":null,"template":"x-t12","expected":[{"type":"generate","source_id":"s2"}],"split":"train"}
+{"id":"x-025","fixture":"F1","request":"원본에 있는 사이렌 소리를 분리해서 새 트랙으로 추가해줘","category":"positive","pair":null,"template":"x-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"x-026","fixture":"F1","request":"아직 따로 안 뽑은 사이렌이 원래 녹음에 있어요. 그걸 추출해서 추가해주세요","category":"positive","pair":null,"template":"x-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"x-027","fixture":"F4","request":"잔잔한 피아노 배경음악을 생성해서 추가해줘","category":"positive","pair":null,"template":"x-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"music"}}],"split":"test"}
+{"id":"x-028","fixture":"F4","request":"이 영상에 쓸 부드러운 piano BGM을 새로 만들어 넣어주세요","category":"positive","pair":null,"template":"x-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"music"}}],"split":"test"}
+{"id":"x-029","fixture":"F1","request":"지금 편집한 결과 내보내줘","category":"positive","pair":null,"template":"x-t15","expected":[{"type":"render"}],"split":"test"}
+{"id":"x-030","fixture":"F1","request":"현재 소리 설정으로 최종 영상을 렌더링해주세요","category":"positive","pair":null,"template":"x-t15","expected":[{"type":"render"}],"split":"test"}
+{"id":"x-031","fixture":"F4","request":"추가한 소리까지 합쳐서 결과 뽑아줘","category":"positive","pair":null,"template":"x-t16","expected":[{"type":"render"}],"split":"test"}
+{"id":"x-032","fixture":"F4","request":"이 상태 그대로 믹스해서 최종본으로 출력해주세요","category":"positive","pair":null,"template":"x-t16","expected":[{"type":"render"}],"split":"test"}
+{"id":"x-033","fixture":"F1","request":"남자 목소리 높여줘, 음량 말고 음정을 두 키","category":"near_miss","pair":"set_gain|set_pitch","template":"x-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":2}],"split":"dev"}
+{"id":"x-034","fixture":"F1","request":"남성 음성의 톤을 2반음 위로 올려주세요","category":"near_miss","pair":"set_gain|set_pitch","template":"x-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":2}],"split":"dev"}
+{"id":"x-035","fixture":"F1","request":"남자 말소리 pitch 두 키만 높여 줘","category":"near_miss","pair":"set_gain|set_pitch","template":"x-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":2}],"split":"dev"}
+{"id":"x-036","fixture":"F1","request":"차 소리 아예 꺼줘","category":"near_miss","pair":"drop|set_gain","template":"x-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"test"}
+{"id":"x-037","fixture":"F1","request":"자동차 지나가는 소리는 음소거해주세요","category":"near_miss","pair":"drop|set_gain","template":"x-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"test"}
+{"id":"x-038","fixture":"F1","request":"차량 통과음은 최종 소리에서 빼버려","category":"near_miss","pair":"drop|set_gain","template":"x-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"test"}
+{"id":"x-039","fixture":"F5","request":"개 소리 볼륨 올리는 게 아니라 꺼둔 걸 다시 켜줘","category":"near_miss","pair":"keep|set_gain","template":"x-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"dev"}
+{"id":"x-040","fixture":"F5","request":"빠져 있는 강아지 짖는 소리 다시 살려주세요","category":"near_miss","pair":"keep|set_gain","template":"x-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"dev"}
+{"id":"x-041","fixture":"F5","request":"dog sound 음소거 해제해줘","category":"near_miss","pair":"keep|set_gain","template":"x-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"dev"}
+{"id":"x-042","fixture":"F1","request":"개 소리 새로 만들지 말고 원본에서 다시 뽑아줘","category":"near_miss","pair":"reseparate|generate","template":"x-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"dev"}
+{"id":"x-043","fixture":"F1","request":"짖는 소리는 생성으로 대체하는 대신 기존 녹음에서 재추출해주세요","category":"near_miss","pair":"reseparate|generate","template":"x-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"dev"}
+{"id":"x-044","fixture":"F1","request":"강아지 소리 다시 해줘. 합성 말고 원래 오디오 재분리로","category":"near_miss","pair":"reseparate|generate","template":"x-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"dev"}
+{"id":"x-045","fixture":"F1","request":"원본에는 없는 천둥 효과음을 새로 생성해서 추가해줘","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"x-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"x-046","fixture":"F1","request":"천둥은 녹음된 게 없으니 AI로 만들어 새 트랙에 넣어주세요","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"x-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"x-047","fixture":"F1","request":"없는 소리를 하나 보태자. 우르릉 천둥을 합성해서 추가해줘","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"x-t21","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"x-048","fixture":"F1","request":"지금 내보내면 어떤 소리들이 포함돼?","category":"near_miss","pair":"render|none","template":"x-t22","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-049","fixture":"F1","request":"현재 설정으로 출력할 경우 어떤 트랙이 들리는지 궁금해요","category":"near_miss","pair":"render|none","template":"x-t22","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-050","fixture":"F1","request":"렌더링 결과에 들어갈 소리 목록이 뭐야?","category":"near_miss","pair":"render|none","template":"x-t22","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-051","fixture":"F1","request":"거리 환경음 말고 분리하고 남은 나머지 소리를 꺼줘","category":"near_miss","pair":"residual|source","template":"x-t23","expected":[{"type":"drop","source_id":"residual"}],"split":"dev"}
+{"id":"x-052","fixture":"F1","request":"따로 있는 street ambience는 두고, 나머지 소리 트랙만 빼주세요","category":"near_miss","pair":"residual|source","template":"x-t23","expected":[{"type":"drop","source_id":"residual"}],"split":"dev"}
+{"id":"x-053","fixture":"F1","request":"분리된 거리 소리가 아니라 잔여 오디오를 음소거해줘","category":"near_miss","pair":"residual|source","template":"x-t23","expected":[{"type":"drop","source_id":"residual"}],"split":"dev"}
+{"id":"x-054","fixture":"F1","request":"이 영상 길이가 몇 초야?","category":"none","pair":null,"template":"x-t24","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-055","fixture":"F1","request":"전체 재생 시간이 얼마나 되는지 알려주세요","category":"none","pair":null,"template":"x-t24","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-056","fixture":"F1","request":"클립 총 길이, 초 단위로 알 수 있어?","category":"none","pair":null,"template":"x-t24","expected":[{"type":"none"}],"split":"test"}
+{"id":"x-057","fixture":"F3","request":"오늘 편집 도와줘서 고마워","category":"none","pair":null,"template":"x-t25","expected":[{"type":"none"}],"split":"dev"}
+{"id":"x-058","fixture":"F3","request":"수고하셨어요, 덕분에 작업이 즐거웠네요","category":"none","pair":null,"template":"x-t25","expected":[{"type":"none"}],"split":"dev"}
+{"id":"x-059","fixture":"F3","request":"땡큐! 같이 하니까 재밌다","category":"none","pair":null,"template":"x-t25","expected":[{"type":"none"}],"split":"dev"}
+{"id":"x-060","fixture":"F1","request":"남자가 하는 말에 한글 자막 달아줘","category":"none","pair":null,"template":"x-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"x-061","fixture":"F1","request":"남성 대사를 화면 아래 자막으로 넣어주세요","category":"none","pair":null,"template":"x-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"x-062","fixture":"F1","request":"남자 말하는 부분 한국어 캡션 만들어 줘","category":"none","pair":null,"template":"x-t26","expected":[{"type":"none"}],"split":"train"}
+{"id":"x-063","fixture":"F2","request":"개 짖는 소리 꺼줘","category":"clarify","pair":null,"template":"x-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"test"}
+{"id":"x-064","fixture":"F2","request":"강아지 소리는 믹스에서 빼주세요","category":"clarify","pair":null,"template":"x-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"test"}
+{"id":"x-065","fixture":"F2","request":"dog sound 음소거 부탁해","category":"clarify","pair":null,"template":"x-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"test"}
+{"id":"x-066","fixture":"F2","request":"화면 왼쪽에서 짖는 개 소리 꺼줘","category":"clarify","pair":null,"template":"x-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"x-067","fixture":"F2","request":"왼편에 보이는 강아지의 짖는 소리를 빼주세요","category":"clarify","pair":null,"template":"x-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"x-068","fixture":"F2","request":"왼쪽 개 있잖아, 걔 소리만 음소거해","category":"clarify","pair":null,"template":"x-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"x-069","fixture":"F5","request":"경적 소리 좀 키워줘","category":"clarify","pair":null,"template":"x-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"test"}
+{"id":"x-070","fixture":"F5","request":"자동차 경적이 작네요. 볼륨을 더 올려주세요","category":"clarify","pair":null,"template":"x-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"test"}
+{"id":"x-071","fixture":"F5","request":"빵 하는 경적 소리 많이 크게 해주라","category":"clarify","pair":null,"template":"x-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"test"}
+{"id":"x-072","fixture":"F1","request":"남자 목소리를 새로 생성한 음성으로 교체해줘","category":"constraint","pair":null,"template":"x-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"x-073","fixture":"F1","request":"현재 남성 대사 대신 AI로 만든 남자 말소리를 써주세요","category":"constraint","pair":null,"template":"x-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"x-074","fixture":"F1","request":"나머지 소리의 피치를 한 키 올려줘","category":"constraint","pair":null,"template":"x-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"x-075","fixture":"F1","request":"분리하고 남은 잔여 오디오를 반음 높여주세요","category":"constraint","pair":null,"template":"x-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"x-076","fixture":"F4","request":"발소리를 원본 오디오에서 다시 분리해줘","category":"constraint","pair":null,"template":"x-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"x-077","fixture":"F4","request":"지금 발걸음 소리는 원래 영상 음원으로 재추출해주세요","category":"constraint","pair":null,"template":"x-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"dev"}
+{"id":"x-078","fixture":"F1","request":"개 소리는 끄고 남자 목소리는 한 키 올려줘","category":"composite","pair":null,"template":"x-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"dev"}
+{"id":"x-079","fixture":"F1","request":"강아지 짖는 건 빼주시고, 남성 음성은 반음 높여주세요","category":"composite","pair":null,"template":"x-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"dev"}
+{"id":"x-080","fixture":"F5","request":"경적 볼륨을 지금의 두 배로 올리고 결과 내보내줘","category":"composite","pair":null,"template":"x-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"train"}
+{"id":"x-081","fixture":"F5","request":"자동차 경적은 현재 음량의 2배로 맞춘 다음 최종본 렌더링해주세요","category":"composite","pair":null,"template":"x-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"train"}
+{"id":"g-001","fixture":"F5","request":"꺼져있는 개 짖는 소리 다시 켜줘","category":"positive","pair":null,"template":"g-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"g-002","fixture":"F5","request":"dog barking 트랙 활성화해줘","category":"positive","pair":null,"template":"g-t01","expected":[{"type":"keep","source_id":"s1"}],"split":"train"}
+{"id":"g-003","fixture":"F3","request":"원래 분리했던 개 짖는 소리 다시 살려줘","category":"positive","pair":null,"template":"g-t02","expected":[{"type":"keep","source_id":"s1"}],"split":"dev"}
+{"id":"g-004","fixture":"F3","request":"첫 번째 원본 개소리 음소거 해제해줘","category":"positive","pair":null,"template":"g-t02","expected":[{"type":"keep","source_id":"s1"}],"split":"dev"}
+{"id":"g-006","fixture":"F1","request":"car passing 사운드 안 들리게 음소거해","category":"positive","pair":null,"template":"g-t03","expected":[{"type":"drop","source_id":"s2"}],"split":"dev"}
+{"id":"g-007","fixture":"F2","request":"새 지저귀는 소리 빼주세요","category":"positive","pair":null,"template":"g-t04","expected":[{"type":"drop","source_id":"s3"}],"split":"dev"}
+{"id":"g-008","fixture":"F2","request":"birds chirping 트랙 완전히 꺼버려","category":"positive","pair":null,"template":"g-t04","expected":[{"type":"drop","source_id":"s3"}],"split":"dev"}
+{"id":"g-010","fixture":"F1","request":"dog barking 볼륨 50%로 낮춰줘","category":"positive","pair":null,"template":"g-t05","expected":[{"type":"set_gain","source_id":"s1","gain":{"ge":0.4,"le":0.6}}],"split":"test"}
+{"id":"g-011","fixture":"F5","request":"자동차 경적 소리 볼륨 두 배로 키워줘","category":"positive","pair":null,"template":"g-t06","expected":[{"type":"set_gain","source_id":"s2","gain":{"ge":0.55,"le":0.65}}],"split":"train"}
+{"id":"g-012","fixture":"F5","request":"car horn 게인 2배로 올려줘","category":"positive","pair":null,"template":"g-t06","expected":[{"type":"set_gain","source_id":"s2","gain":{"ge":0.55,"le":0.65}}],"split":"train"}
+{"id":"g-013","fixture":"F1","request":"남자 목소리 두 키 올려줘","category":"positive","pair":null,"template":"g-t07","expected":[{"type":"set_pitch","source_id":"s3","semitones":2}],"split":"dev"}
+{"id":"g-014","fixture":"F1","request":"man speaking 피치 +2 반음 올려봐","category":"positive","pair":null,"template":"g-t07","expected":[{"type":"set_pitch","source_id":"s3","semitones":2}],"split":"dev"}
+{"id":"g-015","fixture":"F2","request":"작은 개 짖는 소리 한 키 낮춰줘","category":"positive","pair":null,"template":"g-t08","expected":[{"type":"set_pitch","source_id":"s2","semitones":-1}],"split":"dev"}
+{"id":"g-016","fixture":"F2","request":"small dog barking 음높이 반음 내려줘","category":"positive","pair":null,"template":"g-t08","expected":[{"type":"set_pitch","source_id":"s2","semitones":-1}],"split":"dev"}
+{"id":"g-017","fixture":"F1","request":"차 지나가는 소리 원본에서 다시 분리해줘","category":"positive","pair":null,"template":"g-t09","expected":[{"type":"reseparate","source_id":"s2"}],"split":"train"}
+{"id":"g-018","fixture":"F1","request":"car passing 트랙 다시 추출해줘","category":"positive","pair":null,"template":"g-t09","expected":[{"type":"reseparate","source_id":"s2"}],"split":"train"}
+{"id":"g-019","fixture":"F2","request":"큰 개 짖는 소리 다시 분리해봐","category":"positive","pair":null,"template":"g-t10","expected":[{"type":"reseparate","source_id":"s1"}],"split":"dev"}
+{"id":"g-020","fixture":"F2","request":"big dog barking 원본 오디오에서 재분리 부탁해","category":"positive","pair":null,"template":"g-t10","expected":[{"type":"reseparate","source_id":"s1"}],"split":"dev"}
+{"id":"g-021","fixture":"F1","request":"개 짖는 소리 AI로 새로 생성해서 바꿔줘","category":"positive","pair":null,"template":"g-t11","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"g-022","fixture":"F1","request":"dog barking 트랙 새 효과음으로 교체 생성해줘","category":"positive","pair":null,"template":"g-t11","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"g-023","fixture":"F4","request":"발소리 효과음 새로 생성해서 바꿔줘","category":"positive","pair":null,"template":"g-t12","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"g-024","fixture":"F4","request":"footsteps 트랙 다른 소리로 다시 만들어줘","category":"positive","pair":null,"template":"g-t12","expected":[{"type":"generate","source_id":"s1"}],"split":"train"}
+{"id":"g-025","fixture":"F1","request":"영상 오디오에서 배경음악 따로 분리해서 추가해줘","category":"positive","pair":null,"template":"g-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"music"}}],"split":"test"}
+{"id":"g-026","fixture":"F1","request":"원래 영상에 깔린 BGM 분리 추출해서 트랙에 넣어줘","category":"positive","pair":null,"template":"g-t13","expected":[{"type":"add_source","method":"separate","plan":{"kind":"music"}}],"split":"test"}
+{"id":"g-027","fixture":"F4","request":"문 두드리는 효과음 하나 새로 만들어서 넣어줘","category":"positive","pair":null,"template":"g-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"dev"}
+{"id":"g-028","fixture":"F4","request":"노크 소리 SFX 생성해서 추가해","category":"positive","pair":null,"template":"g-t14","expected":[{"type":"add_source","method":"generate","plan":{"kind":"sfx"}}],"split":"dev"}
+{"id":"g-029","fixture":"F1","request":"이대로 최종 믹싱해서 영상 내보내줘","category":"positive","pair":null,"template":"g-t15","expected":[{"type":"render"}],"split":"dev"}
+{"id":"g-030","fixture":"F1","request":"작업 끝났으니 렌더링 진행해줘","category":"positive","pair":null,"template":"g-t15","expected":[{"type":"render"}],"split":"dev"}
+{"id":"g-031","fixture":"F3","request":"오디오 합성해서 영상 추출해줘","category":"positive","pair":null,"template":"g-t16","expected":[{"type":"render"}],"split":"dev"}
+{"id":"g-032","fixture":"F3","request":"최종 결과물 렌더링해줘","category":"positive","pair":null,"template":"g-t16","expected":[{"type":"render"}],"split":"dev"}
+{"id":"g-033","fixture":"F1","request":"남자 목소리 3키 올려줘","category":"near_miss","pair":"set_gain|set_pitch","template":"g-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":3}],"split":"train"}
+{"id":"g-034","fixture":"F1","request":"man speaking 세 키 높여줘","category":"near_miss","pair":"set_gain|set_pitch","template":"g-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":3}],"split":"train"}
+{"id":"g-035","fixture":"F1","request":"남자 말소리 피치 세 반음 올려","category":"near_miss","pair":"set_gain|set_pitch","template":"g-t17","expected":[{"type":"set_pitch","source_id":"s3","semitones":3}],"split":"train"}
+{"id":"g-036","fixture":"F1","request":"차 지나가는 소리 완전히 빼줘","category":"near_miss","pair":"drop|set_gain","template":"g-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"dev"}
+{"id":"g-037","fixture":"F1","request":"자동차 소리 트랙에서 빼버려","category":"near_miss","pair":"drop|set_gain","template":"g-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"dev"}
+{"id":"g-038","fixture":"F1","request":"car passing 사운드 트랙 제외시켜줘","category":"near_miss","pair":"drop|set_gain","template":"g-t18","expected":[{"type":"drop","source_id":"s2"}],"split":"dev"}
+{"id":"g-039","fixture":"F5","request":"꺼져있는 개 짖는 소리 트랙 켜줘","category":"near_miss","pair":"keep|set_gain","template":"g-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"g-040","fixture":"F5","request":"개소리 뮤트된 거 다시 활성화해줘","category":"near_miss","pair":"keep|set_gain","template":"g-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"g-041","fixture":"F5","request":"dog barking 소리 꺼둔 거 풀어줘","category":"near_miss","pair":"keep|set_gain","template":"g-t19","expected":[{"type":"keep","source_id":"s1"}],"split":"test"}
+{"id":"g-042","fixture":"F1","request":"개 짖는 소리 원본 영상에서 다시 따줘","category":"near_miss","pair":"reseparate|generate","template":"g-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"g-043","fixture":"F1","request":"원본 오디오에서 개소리 다시 분리해봐","category":"near_miss","pair":"reseparate|generate","template":"g-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"g-044","fixture":"F1","request":"dog barking 원본에서 재추출해줘","category":"near_miss","pair":"reseparate|generate","template":"g-t20","expected":[{"type":"reseparate","source_id":"s1"}],"split":"test"}
+{"id":"g-045","fixture":"F1","request":"영상에 차 사이렌 소리 들리는데 분리해서 추가해줘","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"g-t21","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"g-046","fixture":"F1","request":"원본 비디오의 사이렌 효과음 따로 추출해서 넣어줘","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"g-t21","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"g-047","fixture":"F1","request":"비디오에 녹음된 사이렌 소리 분리 트랙으로 추가해","category":"near_miss","pair":"add_source_separate|add_source_generate","template":"g-t21","expected":[{"type":"add_source","method":"separate","plan":{"kind":"sfx"}}],"split":"train"}
+{"id":"g-048","fixture":"F1","request":"지금 상태로 영상 최종 출력해줘","category":"near_miss","pair":"render|none","template":"g-t22","expected":[{"type":"render"}],"split":"train"}
+{"id":"g-049","fixture":"F1","request":"이대로 인코딩해서 파일로 뽑아줘","category":"near_miss","pair":"render|none","template":"g-t22","expected":[{"type":"render"}],"split":"train"}
+{"id":"g-050","fixture":"F1","request":"편집 다 됐으니 믹싱 렌더링 시작해","category":"near_miss","pair":"render|none","template":"g-t22","expected":[{"type":"render"}],"split":"train"}
+{"id":"g-051","fixture":"F1","request":"나머지 소리 볼륨 반으로 줄여줘","category":"near_miss","pair":"residual|source","template":"g-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"train"}
+{"id":"g-052","fixture":"F1","request":"residual 트랙 게인 50%로 낮춰줘","category":"near_miss","pair":"residual|source","template":"g-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"train"}
+{"id":"g-053","fixture":"F1","request":"분리 안 된 나머지 소리들 볼륨 절반으로 해줘","category":"near_miss","pair":"residual|source","template":"g-t23","expected":[{"type":"set_gain","source_id":"residual","gain":{"ge":0.4,"le":0.6}}],"split":"train"}
+{"id":"g-054","fixture":"F1","request":"이 영상 총 몇 초짜리야?","category":"none","pair":null,"template":"g-t24","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-055","fixture":"F1","request":"지금 몇 개의 트랙이 분리되어 있어?","category":"none","pair":null,"template":"g-t24","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-056","fixture":"F1","request":"안녕 오늘 날씨 참 좋다","category":"none","pair":null,"template":"g-t24","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-057","fixture":"F1","request":"남자 목소리에 맞춰서 자막 달아줘","category":"none","pair":null,"template":"g-t25","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-058","fixture":"F1","request":"한국어 자막 생성해서 영상 밑에 넣어줘","category":"none","pair":null,"template":"g-t25","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-059","fixture":"F1","request":"대사 자막 싱크 맞춰서 추가해봐","category":"none","pair":null,"template":"g-t25","expected":[{"type":"none"}],"split":"train"}
+{"id":"g-060","fixture":"F4","request":"영상 앞부분 3초 잘라내줘","category":"none","pair":null,"template":"g-t26","expected":[{"type":"none"}],"split":"dev"}
+{"id":"g-061","fixture":"F4","request":"영상 재생 속도 1.5배속으로 빠르게 돌려줘","category":"none","pair":null,"template":"g-t26","expected":[{"type":"none"}],"split":"dev"}
+{"id":"g-062","fixture":"F4","request":"화면 흑백 필터 적용해줘","category":"none","pair":null,"template":"g-t26","expected":[{"type":"none"}],"split":"dev"}
+{"id":"g-064","fixture":"F2","request":"개소리 볼륨 반으로 줄여줘","category":"clarify","pair":null,"template":"g-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"g-065","fixture":"F2","request":"dog barking 트랙 음소거해줘","category":"clarify","pair":null,"template":"g-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"g-066","fixture":"F1","request":"화면 왼쪽에서 짖는 개 소리 꺼줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"g-067","fixture":"F1","request":"오른쪽에서 지나가는 차 소리 줄여줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"clarify","reason":"missing_value"}],"split":"dev"}
+{"id":"g-068","fixture":"F1","request":"화면 가운데 서 있는 남자 목소리 음소거해줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"g-069","fixture":"F1","request":"차 지나가는 소리 조금만 줄여줘","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}
+{"id":"g-070","fixture":"F1","request":"개 짖는 소리 너무 시끄러운데 볼륨 좀 낮춰봐","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}
+{"id":"g-071","fixture":"F1","request":"남자 목소리 살짝만 키워줄래?","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}
+{"id":"g-072","fixture":"F1","request":"나머지 소리 두 키 올려줘","category":"constraint","pair":null,"template":"g-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"g-073","fixture":"F1","request":"residual 트랙 피치 한 반음 내려봐","category":"constraint","pair":null,"template":"g-t30","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"g-074","fixture":"F4","request":"영상 오디오에서 발소리 다시 분리해줘","category":"constraint","pair":null,"template":"g-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"test"}
+{"id":"g-075","fixture":"F4","request":"원본 비디오에서 바람 소리 다시 추출해봐","category":"constraint","pair":null,"template":"g-t31","expected":[{"type":"clarify","reason":"unsupported"}],"split":"test"}
+{"id":"g-076","fixture":"F1","request":"남자 목소리 AI로 새로 생성해서 바꿔줘","category":"constraint","pair":null,"template":"g-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"g-077","fixture":"F1","request":"대사 트랙 새로운 목소리로 생성해서 교체해줘","category":"constraint","pair":null,"template":"g-t32","expected":[{"type":"clarify","reason":"unsupported"}],"split":"train"}
+{"id":"g-078","fixture":"F1","request":"개 짖는 소리 끄고 차 지나가는 소리 반으로 줄여줘","category":"composite","pair":null,"template":"g-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"test"}
+{"id":"g-079","fixture":"F1","request":"차 소리는 음소거하고 남자 목소리 두 배로 키워줘","category":"composite","pair":null,"template":"g-t33","expected":[{"type":"clarify","reason":"composite"}],"split":"test"}
+{"id":"g-080","fixture":"F1","request":"남자 목소리 한 키 올리고 볼륨도 50% 올려줘","category":"composite","pair":null,"template":"g-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"test"}
+{"id":"g-081","fixture":"F1","request":"개 짖는 소리 두 키 낮추고 배경음악 새로 추가해줘","category":"composite","pair":null,"template":"g-t34","expected":[{"type":"clarify","reason":"composite"}],"split":"test"}
