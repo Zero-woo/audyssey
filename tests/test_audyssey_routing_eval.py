@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from collections import defaultdict
@@ -18,8 +19,10 @@ from audyssey.routing_eval import (
     load_cases,
     load_fixture,
     metrics,
+    run_eval,
     value_ok,
 )
+from audyssey.tools.routing import Routed, stub
 
 ROOT = Path(__file__).resolve().parent.parent / "evals" / "routing"
 FIXTURES = ROOT / "fixtures"
@@ -135,10 +138,6 @@ class BlankAndKappaTests(unittest.TestCase):
 
     def test_kappa_chance(self) -> None:
         self.assertEqual(kappa(["a", "b", "a", "b"], ["a", "a", "b", "b"]), 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 def gcase(
@@ -352,3 +351,105 @@ class MetricsTests(unittest.TestCase):
             for i in range(4)
         ]
         self.assertEqual(bootstrap_ci(runs, n=50), (1.0, 1.0))
+
+
+def setup_eval(tmp: Path, n: int = 3) -> tuple[Path, list[Case]]:
+    """A tmp cases dir holding n dev cases and a fixtures copy."""
+    shutil.copytree(FIXTURES, tmp / "fixtures")
+    cases = [
+        make_case(i, f"t{i}").model_copy(
+            update={"request": "개 소리 꺼줘", "split": "dev"}
+        )
+        for i in range(n)
+    ]
+    (tmp / "cases.jsonl").write_text(
+        "".join(c.model_dump_json() + "\n" for c in cases)
+    )
+    return tmp / "cases.jsonl", cases
+
+
+class CountingRouter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, request: str, job: Job) -> Routed:
+        self.calls += 1
+        return Routed(parse_decision(NONE), None, 5.0, 100, 2)
+
+
+class RunEvalTests(unittest.TestCase):
+    def test_stub_run_writes_three_files(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp)
+            result = run_eval(
+                stub.route, "stub", cases, tmp / "fixtures", 2, tmp / "out", tmp / "cache"
+            )
+            self.assertEqual(result["runs"], 6)
+            for name in ("cases.jsonl", "summary.md", "config.json"):
+                self.assertTrue((tmp / "out" / name).exists(), name)
+            config = json.loads((tmp / "out" / "config.json").read_text())
+            for key in ("model", "descriptions_version", "descriptions_sha256", "git_sha"):
+                self.assertTrue(config[key], key)
+            self.assertEqual((config["k"], config["split"], config["model"]), (2, "dev", "stub"))
+            lines = (tmp / "out" / "cases.jsonl").read_text().splitlines()
+            self.assertEqual(len(lines), 6)
+            self.assertEqual(
+                set(json.loads(lines[0])),
+                {"id", "rep", "request", "expected", "decision", "error", "invalid",
+                 "correct", "latency_ms", "input_tokens", "output_tokens"},
+            )
+            self.assertIn("macro-F1", (tmp / "out" / "summary.md").read_text())
+
+    def test_second_run_uses_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp)
+            router = CountingRouter()
+            run_eval(router, "m", cases, tmp / "fixtures", 2, tmp / "o1", tmp / "cache")
+            self.assertEqual(router.calls, 6)
+            run_eval(router, "m", cases, tmp / "fixtures", 2, tmp / "o2", tmp / "cache")
+            self.assertEqual(router.calls, 6)
+            run_eval(router, "m2", cases, tmp / "fixtures", 1, tmp / "o3", tmp / "cache")
+            self.assertEqual(router.calls, 9)
+
+    def test_schema_error_is_cached(self) -> None:
+        calls: list[int] = []
+
+        def bad(request: str, job: Job) -> Routed:
+            calls.append(1)
+            return Routed(None, "bad json", 1.0, 5, 1)
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            for out in ("o1", "o2"):
+                result = run_eval(bad, "m", cases, tmp / "fixtures", 1, tmp / out, tmp / "cache")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(result["invalid_rate"], 1.0)
+
+    def test_invalid_command_is_flagged(self) -> None:
+        def route(request: str, job: Job) -> Routed:
+            return Routed(parse_decision({"type": "drop", "source_id": "nope"}), None, 1.0, 5, 1)
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            result = run_eval(route, "m", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+            self.assertEqual(result["invalid_rate"], 1.0)
+            row = json.loads((tmp / "out" / "cases.jsonl").read_text())
+            self.assertTrue(row["invalid"])
+
+    def test_existing_out_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            (tmp / "out").mkdir()
+            router = CountingRouter()
+            with self.assertRaises(FileExistsError):
+                run_eval(router, "m", cases, tmp / "fixtures", 1, tmp / "out", tmp / "cache")
+            self.assertEqual(router.calls, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

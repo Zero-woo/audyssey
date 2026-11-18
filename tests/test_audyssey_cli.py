@@ -71,3 +71,78 @@ class CliTests(unittest.TestCase):
         with TestClient(run.call_args.args[0]) as client:
             self.assertEqual(client.get('/health').json()['tools'], ['generation'])
             self.assertEqual({r.path for r in client.app.routes} & {'/generate', '/score'}, {'/generate', '/score'})
+
+
+class EvalRoutingCliTests(unittest.TestCase):
+    def setup(self, tmp):
+        import shutil
+        from pathlib import Path
+        from audyssey.routing_eval import Case
+        shutil.copytree(Path(__file__).resolve().parent.parent / "evals" / "routing" / "fixtures", Path(tmp) / "fixtures")
+        cases = [Case.model_validate(dict(id=f"c{i}", fixture="F1", request="개 소리 꺼줘", category="none", template=f"t{i}", expected=[], split="dev")) for i in range(2)]
+        (Path(tmp) / "cases.jsonl").write_text("".join(c.model_dump_json() + "\n" for c in cases))
+
+    def invoke(self, tmp, *args, router=None):
+        import os
+        from pathlib import Path
+        from unittest.mock import patch
+        env = dict(AUDYSSEY_ROUTER_MODEL="m")
+        fake = router or (lambda request, job: None)
+        with patch.dict(os.environ, env), patch("audyssey.cli.load_router", return_value=fake):
+            return CliRunner().invoke(app, ["eval-routing", "--cases", str(Path(tmp) / "cases.jsonl"), "--fixtures", str(Path(tmp) / "fixtures"), "--out", str(Path(tmp) / "out"), *args])
+
+    def test_stub_run_writes_results_and_refuses_overwrite(self):
+        import tempfile
+        from pathlib import Path
+        from audyssey.tools.routing import stub
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            result = self.invoke(tmp, "--split", "dev", "--k", "2", router=stub.route)
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue((Path(tmp) / "out" / "summary.md").exists())
+            again = self.invoke(tmp, "--split", "dev", "--k", "2", router=stub.route)
+            self.assertEqual(again.exit_code, 1, again.output)
+
+    def test_missing_split_exits_1(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            result = self.invoke(tmp, "--split", "train")
+            self.assertEqual(result.exit_code, 1, result.output)
+
+    def test_real_router_needs_yes(self):
+        import tempfile
+        from pathlib import Path
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            result = self.invoke(tmp, "--router", "real", "--split", "dev", "--k", "3", router=lambda r, j: calls.append(1))
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertIn("6", result.output)
+            self.assertIn("13800", result.output)
+            self.assertEqual(calls, [])
+            self.assertFalse((Path(tmp) / "out").exists())
+
+    def test_test_split_is_logged_and_capped(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from audyssey.contracts import parse_decision
+        from audyssey.routing_eval import Case
+        from audyssey.tools.routing import Routed
+        router = lambda r, j: Routed(parse_decision({"type": "none"}), None, 1.0, 1, 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            path = Path(tmp) / "cases.jsonl"
+            path.write_text(path.read_text().replace('"dev"', '"test"'))
+            log = Path(tmp) / "test_opens.jsonl"
+            result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
+            self.assertEqual(result.exit_code, 0, result.output)
+            entry = json.loads(log.read_text())
+            self.assertEqual(entry["model"], "m")
+            self.assertEqual(set(entry), {"date", "model", "git_sha", "out"})
+            log.write_text("{}\n" * 3)
+            (Path(tmp) / "out").rename(Path(tmp) / "out-old")
+            result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertEqual(len(log.read_text().splitlines()), 3)

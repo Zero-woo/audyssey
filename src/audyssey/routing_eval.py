@@ -1,13 +1,28 @@
 """Routing evaluation set: case format, fixtures, splits and labeler agreement."""
 
+import hashlib
+import json
 import math
 import random
+import subprocess
+from collections.abc import Callable
+from datetime import UTC, datetime
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from audyssey.contracts import Job, Model, RouteDecision
+from audyssey import graph
+from audyssey.contracts import (
+    Clarify,
+    Job,
+    Model,
+    NoCommand,
+    RouteDecision,
+    parse_decision,
+)
+from audyssey.tools import routing
+from audyssey.tools.routing import Routed
 
 
 class Case(Model):
@@ -268,3 +283,189 @@ def bootstrap_ci(runs: list[Run], n: int = 2000, seed: int = 0) -> tuple[float, 
     if lo is None or hi is None:
         raise ValueError("no runs to bootstrap")
     return lo, hi
+
+
+DESCRIPTIONS = Path(routing.__file__).parent / "descriptions.json"
+INPUT_TOKENS_PER_CALL = 2300
+_CACHED_FIELDS = ("error", "latency_ms", "input_tokens", "output_tokens")
+
+
+def _descriptions() -> tuple[str, int]:
+    raw = DESCRIPTIONS.read_bytes()
+    return hashlib.sha256(raw).hexdigest(), json.loads(raw)["version"]
+
+
+def _cache_file(cache: Path, model: str, case_id: str, rep: int) -> Path:
+    key = json.dumps([model, _descriptions()[0], case_id, rep])
+    return cache / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
+
+
+def uncached_calls(model: str, cases: list[Case], k: int, cache: Path) -> int:
+    return sum(
+        not _cache_file(cache, model, c.id, rep).exists()
+        for c in cases
+        for rep in range(k)
+    )
+
+
+def git_sha() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return out.stdout.strip()
+
+
+def _is_invalid(job: Job, decision: RouteDecision | None) -> bool:
+    if decision is None or isinstance(decision, Clarify | NoCommand):
+        return False
+    try:
+        graph.check_command(job, decision)
+    except (KeyError, ValueError):
+        return True
+    return False
+
+
+def _run_one(
+    router: Callable[[str, Job], Routed],
+    model: str,
+    case: Case,
+    job: Job,
+    rep: int,
+    cache: Path,
+) -> Run:
+    path = _cache_file(cache, model, case.id, rep)
+    hit: dict
+    if path.exists():
+        hit = json.loads(path.read_text())
+    else:
+        routed = router(case.request, job)
+        hit = {
+            "decision": None
+            if routed.decision is None
+            else routed.decision.model_dump(),
+            **{f: getattr(routed, f) for f in _CACHED_FIELDS},
+        }
+        cache.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(hit))
+    decision = None if hit["decision"] is None else parse_decision(hit["decision"])
+    return Run(
+        case=case,
+        rep=rep,
+        decision=decision,
+        error=hit["error"],
+        invalid=_is_invalid(job, decision),
+        latency_ms=hit["latency_ms"],
+        input_tokens=hit["input_tokens"],
+        output_tokens=hit["output_tokens"],
+    )
+
+
+def _pct(x: float | None) -> str:
+    return "n/a" if x is None else f"{x:.1%}"
+
+
+def _summary(m: dict, ci: tuple[float, float], runs: list[Run]) -> str:
+    rows = [
+        ("macro-F1", f"{m['macro_f1']:.3f} (95% CI {ci[0]:.3f} to {ci[1]:.3f})"),
+        ("none suppression", _pct(m["none_suppression"])),
+        ("over-call", _pct(m["over_call"])),
+        ("clarify hit", _pct(m["clarify_hit"])),
+        ("unnecessary clarify", _pct(m["unnecessary_clarify"])),
+        ("param error", _pct(m["param_error"])),
+        ("invalid rate", _pct(m["invalid_rate"])),
+        ("pass^k", _pct(m["pass_k"])),
+        ("latency p50 / p95 (ms)", f"{m['latency_p50']:.0f} / {m['latency_p95']:.0f}"),
+        ("input / output tokens", f"{m['input_tokens']} / {m['output_tokens']}"),
+        ("runs / cases", f"{m['runs']} / {m['cases']}"),
+    ]
+    lines = ["# Routing eval", "", "| metric | value |", "|---|---|"]
+    lines += [f"| {k} | {v} |" for k, v in rows]
+    pairs = sorted(m["pair_accuracy"].items())
+    if pairs:
+        lines += [
+            "",
+            "## Near-miss pair accuracy",
+            "",
+            "| pair | accuracy |",
+            "|---|---|",
+        ]
+        lines += [f"| {k} | {_pct(v)} |" for k, v in pairs]
+    preds = sorted({p for row in m["confusion"].values() for p in row})
+    lines += ["", "## Confusion (rows gold, columns predicted)", ""]
+    lines += ["| gold | " + " | ".join(preds) + " |", "|---|" + "---|" * len(preds)]
+    for gold in sorted(m["confusion"]):
+        counts = [str(m["confusion"][gold].get(p, 0)) for p in preds]
+        lines.append(f"| {gold} | " + " | ".join(counts) + " |")
+    failed = [r for r in runs if not correct(r.decision, r.case)][:10]
+    lines += ["", "## Failed examples", ""]
+    for r in failed:
+        got = "invalid" if r.decision is None else r.decision.model_dump_json()
+        lines.append(
+            f"- {r.case.id} (rep {r.rep}): request {r.case.request!r}; "
+            f"expected {json.dumps(r.case.expected, ensure_ascii=False)}; got {got}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def run_eval(
+    router: Callable[[str, Job], Routed],
+    model: str,
+    cases: list[Case],
+    fixtures: Path,
+    k: int,
+    out: Path,
+    cache: Path,
+) -> dict:
+    """Route every case k times (cached), grade, and write results to a new out dir."""
+    out.mkdir(parents=True)
+    jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
+    runs = [
+        _run_one(router, model, c, jobs[c.fixture], rep, cache)
+        for c in cases
+        for rep in range(k)
+    ]
+    m = metrics(runs)
+    sha, version = _descriptions()
+    (out / "cases.jsonl").write_text(
+        "".join(
+            json.dumps(
+                {
+                    "id": r.case.id,
+                    "rep": r.rep,
+                    "request": r.case.request,
+                    "expected": r.case.expected,
+                    "decision": None if r.decision is None else r.decision.model_dump(),
+                    "error": r.error,
+                    "invalid": r.invalid,
+                    "correct": correct(r.decision, r.case),
+                    "latency_ms": r.latency_ms,
+                    "input_tokens": r.input_tokens,
+                    "output_tokens": r.output_tokens,
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+            for r in runs
+        )
+    )
+    (out / "config.json").write_text(
+        json.dumps(
+            {
+                "model": model,
+                "router": "stub" if model == "stub" else "real",
+                "descriptions_version": version,
+                "descriptions_sha256": sha,
+                "git_sha": git_sha(),
+                "k": k,
+                "split": cases[0].split,
+                "date": datetime.now(UTC).isoformat(),
+                "cases": len(cases),
+            },
+            indent=2,
+        )
+    )
+    (out / "summary.md").write_text(_summary(m, bootstrap_ci(runs), runs))
+    return m
