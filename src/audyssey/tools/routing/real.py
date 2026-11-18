@@ -48,6 +48,7 @@ def route(
     job: Job,
     endpoint: LLMEndpoint,
     transport: httpx2.BaseTransport | None = None,
+    reasoning_effort: str | None = None,
 ) -> Routed:
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": _system_prompt()},
@@ -69,6 +70,9 @@ def route(
                 "type": "json_schema",
                 "json_schema": {"name": "route_decision", "schema": DECISION_SCHEMA},
             },
+            extra_body={"reasoning_effort": reasoning_effort}
+            if reasoning_effort
+            else None,
         )
     latency_ms = (time.perf_counter() - start) * 1000
     usage = response.usage

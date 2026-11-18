@@ -77,6 +77,19 @@ class RoutingTests(unittest.TestCase):
         route.assert_called_once()
         self.assertEqual(route.call_args.args[2], settings.router_endpoint())
 
+    def test_load_router_real_passes_reasoning_effort(self):
+        with patch.object(real, "route") as route:
+            for effort in ("none", None):
+                settings = Settings(
+                    router="real",
+                    router_reasoning_effort=effort,
+                    planner_base_url="http://test.invalid/v1",
+                    planner_model="m",
+                    planner_api_key="k",
+                )
+                load_router(settings)("dog 꺼줘", make_job())
+                self.assertEqual(route.call_args.kwargs["reasoning_effort"], effort)
+
 
 class RealRouterTests(unittest.TestCase):
     def setUp(self):
@@ -117,13 +130,20 @@ class RealRouterTests(unittest.TestCase):
             },
         )
 
-    def route(self, request="dog 꺼줘"):
+    def route(self, request="dog 꺼줘", **kwargs):
         return real.route(
             request,
             make_job(),
             self.endpoint,
             transport=httpx2.MockTransport(self.respond),
+            **kwargs,
         )
+
+    def test_reasoning_effort_is_sent_only_when_set(self):
+        self.route()
+        self.assertNotIn("reasoning_effort", self.requests[0])
+        self.route(reasoning_effort="none")
+        self.assertEqual(self.requests[1]["reasoning_effort"], "none")
 
     def test_valid_response(self):
         routed = self.route()

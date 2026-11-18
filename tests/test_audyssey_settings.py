@@ -26,6 +26,14 @@ class SettingsTests(unittest.TestCase):
         with patch.dict(os.environ, AUDYSSEY_ROUTER="real"):
             self.assertEqual(Settings().router, "real")
 
+    def test_router_reasoning_effort(self):
+        self.assertIsNone(Settings().router_reasoning_effort)
+        with patch.dict(os.environ, AUDYSSEY_ROUTER_REASONING_EFFORT="none"):
+            self.assertEqual(Settings().router_reasoning_effort, "none")
+        with patch.dict(os.environ, AUDYSSEY_ROUTER_REASONING_EFFORT="max"):
+            with self.assertRaises(ValidationError):
+                Settings()
+
     def test_env_override(self):
         with patch.dict(
             os.environ, AUDYSSEY_PLANNER="real", AUDYSSEY_MAX_PLAN_ROUNDS="3"

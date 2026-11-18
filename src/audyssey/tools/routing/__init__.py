@@ -45,4 +45,5 @@ def load_router(settings: Settings) -> Callable[[str, Job], Routed]:
         return import_module("audyssey.tools.routing.stub").route
     route = import_module("audyssey.tools.routing.real").route
     endpoint = settings.router_endpoint()
-    return lambda request, job: route(request, job, endpoint)
+    effort = settings.router_reasoning_effort
+    return lambda request, job: route(request, job, endpoint, reasoning_effort=effort)
