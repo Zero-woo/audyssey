@@ -636,7 +636,84 @@ def analyze(
     return job
 
 
+def generation_plan(
+    job: Job, source: Source, description: str | None
+) -> tuple[Source, SourcePlan]:
+    target_source = source
+    if source.origin == "separated":
+        replacement = next(
+            (
+                s
+                for s in job.sources
+                if s.origin == "generated" and s.replaces == source.id
+            ),
+            None,
+        )
+        target_source = replacement or Source(
+            id=f"s{max(int(s.id[1:]) for s in job.sources) + 1}",
+            plan=source.plan.model_copy(deep=True),
+            origin="generated",
+            replaces=source.id,
+        )
+    plan = target_source.plan.model_copy(deep=True)
+    if source.origin == "separated":
+        plan.name = source.plan.name + " (generated)"
+    if description is not None:
+        plan.description = description
+    return target_source, plan
+
+
+def reseparation_plan(source: Source, cmd: Reseparate) -> SourcePlan:
+    plan = source.plan.model_copy(deep=True)
+    if cmd.description is not None:
+        plan.description = cmd.description
+    if cmd.spans is not None:
+        plan.spans = cmd.spans
+    return plan
+
+
+def check_command(job: Job, cmd: Command) -> None:
+    """Raise KeyError or ValueError if cmd is invalid; never mutates job."""
+    if isinstance(cmd, AddSource):
+        if job.silent and cmd.method == "separate":
+            raise ValueError("silent videos only support generation")
+        if cmd.method == "generate" and cmd.plan.kind == "dialogue":
+            raise ValueError("dialogue is not generated")
+        _, issues = check_plans([cmd.plan], job.duration)
+        if issues:
+            raise ValueError("; ".join(i.message for i in issues))
+        if any(s.plan.name == cmd.plan.name for s in job.sources):
+            raise ValueError("source name already exists; use reseparate")
+    elif not isinstance(cmd, Render):
+        source = job.find_source(cmd.source_id)
+        if (job.residual if cmd.source_id == "residual" else source) is None:
+            raise KeyError(cmd.source_id)
+        if isinstance(cmd, Generate):
+            if source is None:
+                raise ValueError("residual cannot be generated")
+            if source.plan.kind == "dialogue":
+                raise ValueError("dialogue is not generated")
+            _, plan = generation_plan(job, source, cmd.description)
+            _, issues = check_plans([plan], job.duration)
+            if issues:
+                raise ValueError("; ".join(i.message for i in issues))
+        elif isinstance(cmd, SetPitch):
+            if source is None:
+                raise ValueError("residual does not support pitch")
+        elif isinstance(cmd, Reseparate):
+            if source is None:
+                raise ValueError("residual cannot be reseparated")
+            if job.silent or source.origin == "generated":
+                raise ValueError(
+                    "generated sources and silent videos cannot be reseparated"
+                )
+            _, issues = check_plans([reseparation_plan(source, cmd)], job.duration)
+            if issues:
+                raise ValueError("; ".join(i.message for i in issues))
+
+
 def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
+    check_command(job, cmd)
     directory = ctx.store.dir(job.id)
     ctx = replace(ctx, tools=trace.wrap_tools(ctx.tools, directory, ctx.settings))
     if isinstance(cmd, Render):
@@ -669,15 +746,7 @@ def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
             raise
         update_step(job, ctx, StepStatus(key="render", status="done"))
     elif isinstance(cmd, AddSource):
-        if job.silent and cmd.method == "separate":
-            raise ValueError("silent videos only support generation")
-        if cmd.method == "generate" and cmd.plan.kind == "dialogue":
-            raise ValueError("dialogue is not generated")
-        plans, issues = check_plans([cmd.plan], job.duration)
-        if issues:
-            raise ValueError("; ".join(i.message for i in issues))
-        if any(s.plan.name == cmd.plan.name for s in job.sources):
-            raise ValueError("source name already exists; use reseparate")
+        plans, _ = check_plans([cmd.plan], job.duration)
         number = max((int(s.id[1:]) for s in job.sources), default=0) + 1
         source = Source(
             id=f"s{number}",
@@ -691,37 +760,10 @@ def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
     else:
         source = job.find_source(cmd.source_id)
         target = job.residual if cmd.source_id == "residual" else source
-        if target is None:
-            raise KeyError(cmd.source_id)
+        assert target is not None
         if isinstance(cmd, Generate):
-            if source is None:
-                raise ValueError("residual cannot be generated")
-            if source.plan.kind == "dialogue":
-                raise ValueError("dialogue is not generated")
-            target_source = source
-            if source.origin == "separated":
-                replacement = next(
-                    (
-                        s
-                        for s in job.sources
-                        if s.origin == "generated" and s.replaces == source.id
-                    ),
-                    None,
-                )
-                target_source = replacement or Source(
-                    id=f"s{max(int(s.id[1:]) for s in job.sources) + 1}",
-                    plan=source.plan.model_copy(deep=True),
-                    origin="generated",
-                    replaces=source.id,
-                )
-            plan = target_source.plan.model_copy(deep=True)
-            if source.origin == "separated":
-                plan.name = source.plan.name + " (generated)"
-            if cmd.description is not None:
-                plan.description = cmd.description
-            _, issues = check_plans([plan], job.duration)
-            if issues:
-                raise ValueError("; ".join(i.message for i in issues))
+            assert source is not None
+            target_source, plan = generation_plan(job, source, cmd.description)
             target_source.plan = plan
             if target_source not in job.sources:
                 job.sources.append(target_source)
@@ -737,24 +779,11 @@ def handle_command(job: Job, cmd: Command, ctx: Context) -> Job:
         elif isinstance(cmd, SetGain):
             target.gain = cmd.gain
         elif isinstance(cmd, SetPitch):
-            if source is None:
-                raise ValueError("residual does not support pitch")
+            assert source is not None
             source.pitch_semitones = cmd.semitones
         elif isinstance(cmd, Reseparate):
-            if source is None:
-                raise ValueError("residual cannot be reseparated")
-            if job.silent or source.origin == "generated":
-                raise ValueError(
-                    "generated sources and silent videos cannot be reseparated"
-                )
-            plan = source.plan.model_copy(deep=True)
-            if cmd.description is not None:
-                plan.description = cmd.description
-            if cmd.spans is not None:
-                plan.spans = cmd.spans
-            _, issues = check_plans([plan], job.duration)
-            if issues:
-                raise ValueError("; ".join(i.message for i in issues))
+            assert source is not None
+            plan = reseparation_plan(source, cmd)
             source.plan, source.attempts = plan, 0
             process_source(job, source, ctx)
             refresh_residual(job, ctx)
