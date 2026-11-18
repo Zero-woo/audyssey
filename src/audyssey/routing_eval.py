@@ -184,6 +184,8 @@ class Run:
     latency_ms: float
     input_tokens: int
     output_tokens: int
+    guarded: bool = False
+    broke: bool = False  # raw answer was correct, guarded one is not
 
 
 def _allowed_types(case: Case) -> set[str]:
@@ -359,6 +361,7 @@ def _run_one(
     rep: int,
     cache: Path | None,
     fmt: str,
+    guard: bool = False,
 ) -> Run:
     hit: dict
     path = None if cache is None else _cache_file(cache, model, case.id, rep, fmt)
@@ -376,6 +379,12 @@ def _run_one(
             cache.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(hit))
     decision = None if hit["decision"] is None else parse_decision(hit["decision"])
+    raw_ok = correct(decision, case)
+    guarded = False
+    if guard:
+        # Applied after the cache: the cache keeps the router's raw answer.
+        out = routing.guard(job, Routed(decision, *(hit[f] for f in _CACHED_FIELDS)))
+        decision, guarded = out.decision, out.guarded
     return Run(
         case=case,
         rep=rep,
@@ -385,6 +394,8 @@ def _run_one(
         latency_ms=hit["latency_ms"],
         input_tokens=hit["input_tokens"],
         output_tokens=hit["output_tokens"],
+        guarded=guarded,
+        broke=raw_ok and not correct(decision, case),
     )
 
 
@@ -405,6 +416,8 @@ def _summary(m: dict, ci: tuple[float, float], runs: list[Run]) -> str:
         ("latency p50 / p95 (ms)", f"{m['latency_p50']:.0f} / {m['latency_p95']:.0f}"),
         ("input / output tokens", f"{m['input_tokens']} / {m['output_tokens']}"),
         ("runs / cases", f"{m['runs']} / {m['cases']}"),
+        ("guard fired", _pct(_rate(sum(r.guarded for r in runs), len(runs)))),
+        ("guard broke", str(sum(r.broke for r in runs))),
     ]
     lines = ["# Routing eval", "", "| metric | value |", "|---|---|"]
     lines += [f"| {k} | {v} |" for k, v in rows]
@@ -445,13 +458,14 @@ def run_eval(
     out: Path,
     cache: Path | None,
     fmt: str = "tools",
+    guard: bool = False,
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
     if out.exists():
         raise FileExistsError(out)
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
-        _run_one(router, model, c, jobs[c.fixture], rep, cache, fmt)
+        _run_one(router, model, c, jobs[c.fixture], rep, cache, fmt, guard)
         for c in cases
         for rep in range(k)
     ]
@@ -473,6 +487,7 @@ def run_eval(
                     "latency_ms": r.latency_ms,
                     "input_tokens": r.input_tokens,
                     "output_tokens": r.output_tokens,
+                    "guarded": r.guarded,
                 },
                 ensure_ascii=False,
             )
@@ -486,6 +501,7 @@ def run_eval(
                 "model": model,
                 "router": router_name,
                 "format": fmt,
+                "guard": guard,
                 "descriptions_version": version,
                 "descriptions_sha256": sha,
                 "git_sha": git_sha(),

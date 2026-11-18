@@ -424,6 +424,7 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 |---|---|---|
 | `AUDYSSEY_ROUTER_REASONING_EFFORT` | (비움) | `none`/`low`/`medium`/`high`. 비우면 보내지 않음. Gemini(OpenAI 호환)에서 `none`이면 thinking을 꺼 지연이 줄어듦 |
 | `AUDYSSEY_ROUTER_FORMAT` | `tools` | `tools` 또는 `json_schema`. `tools`는 명령마다 함수 하나를 주고 모델이 하나를 호출(function calling), `json_schema`는 구조화 출력으로 JSON 하나를 받음. 비교용으로 남겨 둠 |
+| `AUDYSSEY_ROUTER_GUARD` | `false` | 기본 꺼짐. 켜면 작업이 실행할 수 없는 명령을 되묻기(clarify)로 바꿈 |
 | `AUDYSSEY_ROUTER_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` | 플래너 값 | `AUDYSSEY_ROUTER=real`일 때 쓰는 라우터 모델. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀. API는 `openai` 또는 `openrouter`만 가능(`gemini`면 시작할 때 오류) |
 
 **흐름과 작업**

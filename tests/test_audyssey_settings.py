@@ -26,6 +26,12 @@ class SettingsTests(unittest.TestCase):
         with patch.dict(os.environ, AUDYSSEY_ROUTER="real"):
             self.assertEqual(Settings().router, "real")
 
+    def test_router_guard_defaults_off_and_reads_env(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(Settings().router_guard)
+        with patch.dict(os.environ, {"AUDYSSEY_ROUTER_GUARD": "true"}, clear=True):
+            self.assertTrue(Settings().router_guard)
+
     def test_router_reasoning_effort(self):
         self.assertIsNone(Settings().router_reasoning_effort)
         with patch.dict(os.environ, AUDYSSEY_ROUTER_REASONING_EFFORT="none"):

@@ -411,7 +411,7 @@ class RunEvalTests(unittest.TestCase):
             self.assertEqual(
                 set(json.loads(lines[0])),
                 {"id", "rep", "request", "expected", "decision", "error", "invalid",
-                 "correct", "latency_ms", "input_tokens", "output_tokens"},
+                 "correct", "latency_ms", "input_tokens", "output_tokens", "guarded"},
             )
             self.assertIn("macro-F1", (tmp / "out" / "summary.md").read_text())
 
@@ -426,6 +426,29 @@ class RunEvalTests(unittest.TestCase):
             self.assertEqual(router.calls, 6)
             run_eval(router, "m2", "real", cases, tmp / "fixtures", 1, tmp / "o3", tmp / "cache")
             self.assertEqual(router.calls, 9)
+
+    def test_guard_reuses_cache_and_reports_zero_broke(self) -> None:
+        def invalid(request: str, job: Job) -> Routed:
+            routed = Routed(parse_decision({"type": "drop", "source_id": "nope"}), None, 1.0, 5, 1)
+            self.calls += 1
+            return routed
+
+        self.calls = 0
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 2)
+            off = run_eval(invalid, "m", "real", cases, tmp / "fixtures", 1, tmp / "o1", tmp / "cache")
+            self.assertEqual(self.calls, 2)
+            on = run_eval(invalid, "m", "real", cases, tmp / "fixtures", 1, tmp / "o2", tmp / "cache", guard=True)
+            self.assertEqual(self.calls, 2)
+            self.assertEqual((off["invalid_rate"], on["invalid_rate"]), (1.0, 0.0))
+            configs = [json.loads((tmp / o / "config.json").read_text())["guard"] for o in ("o1", "o2")]
+            self.assertEqual(configs, [False, True])
+            rows = [json.loads(line) for line in (tmp / "o2" / "cases.jsonl").read_text().splitlines()]
+            self.assertTrue(all(r["guarded"] for r in rows))
+            summary = (tmp / "o2" / "summary.md").read_text()
+            self.assertIn("guard fired | 100.0%", summary)
+            self.assertIn("guard broke | 0", summary)
 
     def test_schema_error_is_cached(self) -> None:
         calls: list[int] = []

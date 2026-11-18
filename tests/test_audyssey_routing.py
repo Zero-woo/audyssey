@@ -10,14 +10,17 @@ from langsmith.run_helpers import get_tracing_context
 from audyssey.contracts import (
     Clarify,
     Drop,
+    Generate,
     Job,
     NoCommand,
+    Reseparate,
     SetGain,
+    SetPitch,
     Source,
     SourcePlan,
 )
 from audyssey.settings import Settings
-from audyssey.tools.routing import load_router, summarize
+from audyssey.tools.routing import Routed, guard, load_router, summarize
 from audyssey.tools.routing import real, stub
 
 
@@ -396,3 +399,68 @@ class CacheKeyTests(unittest.TestCase):
             _cache_file(root, "m", "c1", 0, "tools"),
             _cache_file(root, "m", "c1", 0, "tools"),
         )
+
+def routed(decision) -> Routed:
+    return Routed(decision, None, 7.0, 11, 3)
+
+
+class GuardTests(unittest.TestCase):
+    def dialogue_job(self, silent: bool = False) -> Job:
+        plan = SourcePlan(name="talk", kind="dialogue", description="d")
+        return Job(
+            id="j",
+            video_path="v.mp4",
+            silent=silent,
+            sources=[Source(id="s1", plan=plan, gain=0.8)],
+        )
+
+    def assert_clarified(self, out: Routed, reason: str, question: str):
+        self.assertEqual(out.decision, Clarify(question=question, reason=reason))
+        self.assertTrue(out.guarded)
+        self.assertEqual((out.latency_ms, out.input_tokens, out.output_tokens), (7.0, 11, 3))
+
+    def test_dialogue_generate_is_unsupported(self):
+        out = guard(self.dialogue_job(), routed(Generate(source_id="s1")))
+        self.assert_clarified(out, "unsupported", "대사는 새로 만들 수 없어요.")
+
+    def test_silent_video_reseparate_is_unsupported(self):
+        out = guard(make_job().model_copy(update={"silent": True}), routed(Reseparate(source_id="s1")))
+        self.assert_clarified(
+            out, "unsupported", "생성한 소리나 소리가 없는 영상은 다시 분리할 수 없어요."
+        )
+
+    def test_unknown_source_is_ambiguous_target(self):
+        out = guard(make_job(), routed(Drop(source_id="nope")))
+        self.assert_clarified(out, "ambiguous_target", "어느 소리를 말씀하시나요?")
+
+    def test_residual_messages(self):
+        job = make_job()
+        for decision, text in [
+            (Generate(source_id="residual"), "나머지 소리는 새로 만들 수 없어요."),
+            (SetPitch(source_id="residual", semitones=1), "나머지 소리는 음높이를 바꿀 수 없어요."),
+            (Reseparate(source_id="residual"), "나머지 소리는 다시 분리할 수 없어요."),
+        ]:
+            self.assert_clarified(guard(job, routed(decision)), "unsupported", text)
+
+    def test_unchanged_answers(self):
+        for decision in [
+            SetGain(source_id="s1", gain=0.5),
+            Clarify(question="q", reason="other"),
+            NoCommand(),
+            None,
+        ]:
+            original = routed(decision)
+            out = guard(make_job(), original)
+            self.assertEqual(out, original)
+            self.assertFalse(out.guarded)
+
+    def test_load_router_wraps_only_when_guard_on(self):
+        def bad(request: str, job: Job) -> Routed:
+            return routed(Drop(source_id="nope"))
+
+        with patch.object(stub, "route", bad):
+            self.assertIs(load_router(Settings(router="stub")), bad)
+            out = load_router(Settings(router="stub", router_guard=True))("x", make_job())
+        assert isinstance(out.decision, Clarify)
+        self.assertTrue(out.guarded)
+

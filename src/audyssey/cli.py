@@ -72,6 +72,7 @@ def eval_routing(
     yes: bool = False,
     cases: Path = Path("evals/routing/cases.jsonl"),
     fixtures: Path = Path("evals/routing/fixtures"),
+    guard: bool = False,
 ) -> None:
     """Route each labeled case k times without executing commands."""
 
@@ -116,6 +117,7 @@ def eval_routing(
         out,
         cache if router == "real" else None,
         settings.router_format,
+        guard,
     )
     if router == "real" and split == "test":
         entry = {
