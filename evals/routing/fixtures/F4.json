@@ -1,0 +1,37 @@
+{
+  "id": "F4",
+  "video_path": "F4.mp4",
+  "silent": true,
+  "duration": 12,
+  "audio_path": "",
+  "mono_path": "",
+  "sources": [
+    {
+      "id": "s1",
+      "plan": {
+        "name": "footsteps",
+        "kind": "sfx",
+        "description": "footsteps"
+      },
+      "status": "done",
+      "track_path": "x/s1.wav",
+      "origin": "generated"
+    },
+    {
+      "id": "s2",
+      "plan": {
+        "name": "wind",
+        "kind": "ambience",
+        "description": "wind"
+      },
+      "status": "done",
+      "track_path": "x/s2.wav",
+      "origin": "generated"
+    }
+  ],
+  "residual": {
+    "path": null
+  },
+  "state": "ready",
+  "method": "generate"
+}

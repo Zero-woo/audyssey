@@ -1,0 +1,48 @@
+{
+  "id": "F3",
+  "video_path": "F3.mp4",
+  "silent": false,
+  "duration": 12,
+  "audio_path": "F3/audio.wav",
+  "mono_path": "F3/mono.wav",
+  "sources": [
+    {
+      "id": "s1",
+      "plan": {
+        "name": "dog barking",
+        "kind": "sfx",
+        "description": "dog barking"
+      },
+      "status": "done",
+      "track_path": "x/s1.wav",
+      "keep": false
+    },
+    {
+      "id": "s2",
+      "plan": {
+        "name": "dog barking (generated)",
+        "kind": "sfx",
+        "description": "dog barking (generated)"
+      },
+      "status": "done",
+      "track_path": "x/s2.wav",
+      "origin": "generated",
+      "replaces": "s1"
+    },
+    {
+      "id": "s3",
+      "plan": {
+        "name": "woman speaking",
+        "kind": "dialogue",
+        "description": "woman speaking"
+      },
+      "status": "done",
+      "track_path": "x/s3.wav"
+    }
+  ],
+  "residual": {
+    "path": "F3/residual.wav"
+  },
+  "state": "ready",
+  "method": "separate"
+}

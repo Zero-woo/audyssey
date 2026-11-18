@@ -1,0 +1,45 @@
+{
+  "id": "F2",
+  "video_path": "F2.mp4",
+  "silent": false,
+  "duration": 12,
+  "audio_path": "F2/audio.wav",
+  "mono_path": "F2/mono.wav",
+  "sources": [
+    {
+      "id": "s1",
+      "plan": {
+        "name": "big dog barking",
+        "kind": "sfx",
+        "description": "big dog barking"
+      },
+      "status": "done",
+      "track_path": "x/s1.wav"
+    },
+    {
+      "id": "s2",
+      "plan": {
+        "name": "small dog barking",
+        "kind": "sfx",
+        "description": "small dog barking"
+      },
+      "status": "done",
+      "track_path": "x/s2.wav"
+    },
+    {
+      "id": "s3",
+      "plan": {
+        "name": "birds chirping",
+        "kind": "ambience",
+        "description": "birds chirping"
+      },
+      "status": "done",
+      "track_path": "x/s3.wav"
+    }
+  ],
+  "residual": {
+    "path": "F2/residual.wav"
+  },
+  "state": "ready",
+  "method": "separate"
+}

@@ -1,0 +1,5 @@
+{"id": "ex-1", "fixture": "F1", "request": "개 소리 좀 줄여줘", "category": "positive", "pair": "drop|set_gain", "template": "t-ex-1", "expected": [{"type": "set_gain", "source_id": "s1", "gain": {"lt": 1.0}}], "split": null}
+{"id": "ex-2", "fixture": "F1", "request": "영상 길이를 반으로 줄여줘", "category": "none", "pair": null, "template": "t-ex-2", "expected": [], "split": null}
+{"id": "ex-3", "fixture": "F2", "request": "개 소리 지워줘", "category": "clarify", "pair": null, "template": "t-ex-3", "expected": [{"type": "clarify", "reason": "big dog and small dog both match"}], "split": null}
+{"id": "ex-4", "fixture": "F3", "request": "원래 개 소리 다시 켜줘", "category": "constraint", "pair": null, "template": "t-ex-4", "expected": [{"type": "keep", "source_id": "s1"}], "split": null}
+{"id": "ex-5", "fixture": "F5", "request": "자동차 경적 소리 없애줘", "category": "positive", "pair": "drop|set_gain", "template": "t-ex-5", "expected": [{"type": "drop", "source_id": "s2"}, {"type": "set_gain", "source_id": "s2", "gain": 0.0}], "split": null}
