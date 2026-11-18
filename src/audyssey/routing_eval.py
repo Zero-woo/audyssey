@@ -372,7 +372,9 @@ def _run_one(
     effort: str | None = None,
 ) -> Run:
     hit: dict
-    path = None if cache is None else _cache_file(cache, model, case.id, rep, fmt, effort)
+    path = (
+        None if cache is None else _cache_file(cache, model, case.id, rep, fmt, effort)
+    )
     if path is not None and path.exists():
         hit = json.loads(path.read_text())
     else:
