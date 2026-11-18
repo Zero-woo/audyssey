@@ -158,6 +158,28 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(27 33 48 / 0.12); }
 .transport .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
+/* natural-language edit bar */
+.nlbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px 10px 12px; box-shadow: 0 1px 0 var(--line); }
+.nlfield { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
+.nlfield:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nlfield input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--ink); padding: 0; outline: none; }
+.nlfield input::placeholder { color: var(--muted); }
+.nlfield:has(input:disabled) { opacity: .6; }
+.nlc { margin: 10px 14px 10px 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow), inset 3px 0 0 var(--accent); }
+.nlc p { margin: 0 0 8px; font-weight: 500; overflow-wrap: anywhere; }
+.nlc .acts, .nlc .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.nlc .chips { margin-bottom: 8px; }
+.nlc p + .acts { margin-top: 2px; }
+.nlnum { width: 64px; height: 28px; margin: 0 2px; padding: 0 6px; border: 0; border-radius: 6px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); text-align: right; }
+.nlchip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 9px; border: 0; border-radius: 999px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; font-weight: 500; }
+@media (hover: hover) { .nlchip:hover { background: var(--accent-soft); } }
+.row.target { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent), 0 1px 0 var(--line); }
+@media (prefers-reduced-motion: no-preference) {
+  .nlc { animation: nl-in 180ms var(--ease); }
+  .row { transition: background-color 150ms ease-out; }
+}
+@keyframes nl-in { from { opacity: 0; translate: 0 -4px; } }
+
 .grid { --name: 220px; --ctl: 344px; display: grid; grid-template-columns: var(--name) minmax(0, 1fr) var(--ctl); column-gap: 20px; }
 .thead { height: 34px; align-items: center; color: var(--muted); font-size: 12px; font-weight: 500; box-shadow: 0 1px 0 var(--line); }
 .thead > div:first-child { padding-left: 18px; }
@@ -376,6 +398,12 @@ details.sub > summary::-webkit-details-marker { display: none; }
       </div>
       <div class="right"><span class="cap" id="busy"></span></div>
     </div>
+    <form class="nlbar" id="nl-form">
+      <label class="nlfield"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg>
+        <input id="nl-input" type="text" maxlength="500" autocomplete="off" aria-label="말로 편집하기" disabled></label>
+      <button class="btn primary" id="nl-go" type="submit" disabled></button>
+    </form>
+    <div id="nl-card" role="status"></div>
     <div class="grid thead">
       <div>트랙</div>
       <div class="ruler" id="ruler"></div>
@@ -690,7 +718,7 @@ function trackRow(t, index, locked) {
   const more = actions.length ? el("button", { class: "ibtn", "aria-label": `${t.name} 작업`, "aria-haspopup": "menu", disabled: locked, onclick: (e) => openMenu(e.currentTarget, actions) }, busy && t.pitch === null ? el("span", { class: "spin" }) : icon("more")) : el("span");
 
   const pair = t.pair ? (t.source.replaces ? " pair-b" : " pair-a") : "";
-  return el("div", { class: `grid row${t.keep ? "" : " off"}${pair}` },
+  return el("div", { class: `grid row${t.keep ? "" : " off"}${pair}${t.id === NL.hl ? " target" : ""}` },
     el("div", { class: "who" },
       el("span", { class: "chip", style: `background:${tint};color:${t.color}` }, icon(kindIcon)),
       el("div", { style: "min-width:0" }, el("b", {}, t.name), el("small", {}, meta))),
@@ -820,16 +848,19 @@ async function send(cmds, rowId, rerender = false) {
   if (S.busy) return;
   S.busy = rowId || "edit";
   drawRows(); drawStatus();
+  let ok = false;
   try {
     for (const cmd of [cmds].flat()) S.job = await command(cmd);
     // Pitch needs the server render; long commands also re-render so export stays current.
     if (rerender) S.job = await command({ type: "render" });
+    ok = true;
   } catch (e) { toast("변경을 적용하지 못했습니다. 다시 시도하세요.", e); }
   finally {
     S.busy = null;
     drawAll();
     await syncTracks();
   }
+  return ok;
 }
 $("export").addEventListener("click", async () => {
   if (!S.job || S.busy) return;
@@ -840,6 +871,137 @@ $("export").addEventListener("click", async () => {
     document.body.append(a); a.click(); a.remove();
   } catch (e) { toast("내보내지 못했습니다. 다시 시도하세요.", e); }
   finally { S.busy = null; drawAll(); }
+});
+
+/* ---------- natural-language edit bar ---------- */
+// The router only proposes; nothing changes until the user runs the card.
+const NL = { n: 0, pending: false, original: "", card: null, hl: null };
+const nlInput = $("nl-input"), nlGo = $("nl-go");
+const pct = (g) => `${Math.round(g * 100)}%`;
+const st = (v) => `${v > 0 ? "+" : ""}${v}st`;
+const nlTrack = (id) => trackList().find((t) => t.id === id) || (id === "residual" && S.job ? { name: "나머지 소리", gain: S.job.residual.gain, pitch: null } : null);
+
+function nlSync() {
+  const ok = S.job?.state === "ready";
+  nlInput.disabled = !ok;
+  nlInput.placeholder = ok ? "무엇을 바꿀까요? 예: 칼 소리 반으로 줄여줘" : "영상을 올리고 분석이 끝나면 쓸 수 있습니다";
+  nlGo.disabled = !ok || NL.pending;
+  nlGo.setAttribute("aria-busy", String(NL.pending));
+  nlGo.replaceChildren(NL.pending ? el("span", { class: "spin" }) : icon("spark"), NL.pending ? "해석 중…" : "해석");
+}
+function nlHighlight(id) {
+  NL.hl = id || null;
+  for (const r of $("rows").querySelectorAll(".row.target")) r.classList.remove("target");
+  if (NL.hl) $("rows").querySelector(`.wave[data-id="${CSS.escape(NL.hl)}"]`)?.closest(".row")?.classList.add("target");
+}
+function nlClose(refocus) {
+  NL.card = null; nlHighlight(null); nlDraw();
+  if (refocus && !nlInput.disabled) nlInput.focus();
+}
+// A job switch drops the card, the highlight and any answer still on its way.
+function nlReset() { NL.n++; NL.pending = false; NL.original = ""; nlClose(); nlSync(); }
+
+function nlSentence(d, input) {
+  const cur = nlTrack(d.source_id), name = cur?.name ?? d.source_id;
+  switch (d.type) {
+    case "set_gain": return [`${name} 음량 ${cur ? pct(cur.gain) : "?"} → `, input || pct(d.gain), input && "%"];
+    case "set_pitch": return [`${name} 피치 ${st(cur?.pitch || 0)} → `, input || st(d.semitones), input && "st"];
+    case "drop": return [`${name} 끄기`];
+    case "keep": return [`${name} 켜기`];
+    case "reseparate": return [`${name} 다시 분리`];
+    case "generate": return [`${name} 생성으로 바꾸기`];
+    case "add_source": return [`새 소스 추가: ${d.plan.name} (${d.method === "generate" ? "생성" : "분리"})`];
+    default: return ["결과 합치기"];
+  }
+}
+const NUM = { set_gain: { min: 0, max: 200, step: 5 }, set_pitch: { min: -12, max: 12, step: 1 } };
+
+function nlDraw() {
+  const box = $("nl-card"), c = NL.card;
+  if (!c) { box.replaceChildren(); return; }
+  const d = c.decision, cancel = el("button", { class: "btn", type: "button", onclick: () => nlClose(true) }, "취소");
+  let body;
+  if (d.type === "none") {
+    body = [el("p", {}, "할 수 없는 요청입니다. 다른 표현으로 다시 입력해 주세요.")];
+  } else if (d.type === "clarify") {
+    const chips = d.reason !== "ambiguous_target" ? null : el("div", { class: "chips" }, nlTargets().map((t) =>
+      el("button", { class: "nlchip", type: "button", onclick: () => nlRoute(`${NL.original} (대상: ${t.name}, ${t.id})`, NL.original) },
+        icon(t.kind === "residual" ? "residual" : t.kind), t.name)));
+    body = [el("p", {}, d.question), chips, el("div", { class: "acts" }, cancel)];
+  } else {
+    const num = NUM[d.type];
+    NL.input = c.editing && num ? el("input", { class: "nlnum", type: "number", ...num, "aria-label": d.type === "set_gain" ? "새 음량(%)" : "새 피치(st)",
+      value: d.type === "set_gain" ? Math.round(d.gain * 100) : d.semitones, onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); nlRun(); } } }) : null;
+    body = [el("p", {}, nlSentence(d, NL.input)), el("div", { class: "acts" },
+      el("button", { class: "btn primary", type: "button", id: "nl-run", onclick: nlRun }, "실행"),
+      c.editing ? null : el("button", { class: "btn", type: "button", onclick: nlEdit }, "수정"), cancel)];
+  }
+  box.replaceChildren(el("div", { class: "nlc" }, body));
+}
+function nlTargets() {
+  const list = trackList();
+  return list.some((t) => t.id === "residual") ? list : [...list, { id: "residual", name: "나머지 소리", kind: "residual" }];
+}
+function nlEdit() {
+  const d = NL.card.decision;
+  if (NUM[d.type]) { NL.card.editing = true; nlDraw(); NL.input.focus(); NL.input.select(); return; }
+  nlInput.value = NL.original; nlClose(true);
+}
+async function nlRun() {
+  const d = { ...NL.card.decision }, run = $("nl-run");
+  if (NL.input) {
+    const num = NUM[d.type], v = Math.min(num.max, Math.max(num.min, Number(NL.input.value)));
+    if (Number.isNaN(v)) { NL.input.focus(); return; }
+    if (d.type === "set_gain") d.gain = v / 100; else d.semitones = v;
+  }
+  run.disabled = true;
+  const ok = await send([d], d.source_id || null, ["set_pitch", "reseparate", "generate"].includes(d.type));
+  if (!ok) { if (run.isConnected) run.disabled = false; return; }
+  nlClose(true);
+  toast("적용했습니다.");
+  const box = document.querySelector(".toast");
+  setTimeout(() => box?.remove(), 3500);
+}
+async function nlRoute(text, original) {
+  const id = S.job?.id;
+  if (!id) return;
+  const n = ++NL.n;
+  NL.original = original; NL.pending = true;
+  if ($("nl-card").contains(document.activeElement)) nlInput.focus();
+  nlClose(); nlSync();
+  let out = null, err = null;
+  try {
+    const res = await fetch(`/api/jobs/${id}/route`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request: text }) });
+    if (res.status === 502) err = "bad";
+    else if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch {}
+      err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } else out = await res.json();
+  } catch (e) { err = e; }
+  if (n !== NL.n || S.job?.id !== id) return;
+  NL.pending = false; nlSync();
+  if (err === "bad") return toast("라우터 응답 형식이 맞지 않습니다. 다시 시도하세요.");
+  if (err) return toast("요청을 해석하지 못했습니다.", err);
+  const d = out.decision;
+  NL.card = { decision: d, editing: false };
+  nlHighlight(d.source_id);
+  nlDraw();
+  if (d.type === "none") nlInput.focus();
+  else if (d.type === "clarify") {
+    if (d.reason === "ambiguous_target") $("nl-card").querySelector(".nlchip")?.focus();
+    else { nlInput.value = original; nlInput.focus(); nlInput.setSelectionRange(original.length, original.length); }
+  }
+}
+$("nl-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = nlInput.value.trim();
+  if (!text || NL.pending || S.job?.state !== "ready") return;
+  nlRoute(text, text);
+});
+$("nl-form").parentElement.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !NL.card || !(e.target.closest("#nl-card, #nl-form"))) return;
+  nlClose(true);
 });
 
 /* ---------- pipeline board ---------- */
@@ -1239,7 +1401,7 @@ function drawStatus() {
   $("export").disabled = !job || job.state !== "ready" || !!S.busy;
 }
 function drawAll() {
-  drawStatus(); drawBoard(); drawRuler(); drawRows(); drawTransport();
+  drawStatus(); drawBoard(); drawRuler(); drawRows(); drawTransport(); nlSync();
   $("drop").hidden = !!S.job;
   if (S.selected) drawDrawer();
   drawEdge();
@@ -1261,7 +1423,7 @@ function follow(job) {
   pause();
   for (const t of A.tracks.values()) t.gain.disconnect();
   A.tracks.clear(); A.offset = 0;
-  S.job = job; S.trace = [];
+  S.job = job; S.trace = []; nlReset();
   $("jobs").value = job.id;
   video.src = fileUrl(job.video_path);
   video.muted = true;
@@ -1291,7 +1453,7 @@ async function loadJobs(select) {
   return jobs;
 }
 $("jobs").addEventListener("change", async (e) => {
-  if (!e.target.value) { S.events?.close(); pause(); S.job = null; video.removeAttribute("src"); A.tracks.clear(); drawAll(); return; }
+  if (!e.target.value) { S.events?.close(); pause(); S.job = null; nlReset(); video.removeAttribute("src"); A.tracks.clear(); drawAll(); return; }
   try { follow(await api(`/api/jobs/${e.target.value}`)); } catch (err) { toast("프로젝트를 열지 못했습니다. 목록에서 다시 고르세요.", err); }
 });
 
