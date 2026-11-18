@@ -85,7 +85,7 @@ All fixtures are 12 s long, and every one has a residual track ("나머지 소�
    - Turning something fully off or on is not an amount problem: "꺼줘", "안 들리게", "빼줘" → `drop`; "다시 켜줘", "살려줘" → `keep`.
 2. **Out of range** (gain above 2 such as "3배", pitch beyond ±12 such as "20키") → `clarify` / `unsupported`. Never clamp.
 3. **Known impossible actions** (table above), such as regenerating dialogue, re-separating on F4, or pitch on residual → `clarify` / `unsupported`.
-4. **Ambiguous target.** Two or more sources match ("개 소리" in F2), no source is named for an edit, or the target is a screen position ("왼쪽에서 짖는 개") → `clarify` / `ambiguous_target`. If both the target and the amount are missing, either `ambiguous_target` or `missing_value` is acceptable; list both.
+4. **Ambiguous target.** Two or more sources match ("개 소리" in F2), no source is named for an edit, or the target is a screen position ("왼쪽에서 짖는 개") → `clarify` / `ambiguous_target`. When a screen-position request matches exactly one source in the fixture (e.g. the only dog in F1), the command is also correct: list both. If both the target and the amount are missing, either `ambiguous_target` or `missing_value` is acceptable; list both.
 5. **Two or more edits in one request** ("차 소리 줄이고 새소리 추가해") → `clarify` / `composite`.
 6. **Not an edit request** (questions about the video, chit-chat, unsupported features such as subtitles, trimming, speed or video effects) → `none`.
 7. "Fully quiet" wording ("거의 안 들리게", "아예 없애") may allow both `drop` and `set_gain` with `{"le": 0.1}`. List both.

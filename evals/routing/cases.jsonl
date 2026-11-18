@@ -63,9 +63,9 @@
 {"id":"c-063","fixture":"F2","request":"개 짖는 소리 반으로 줄여줘","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
 {"id":"c-064","fixture":"F2","request":"dog volume 반으로","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
 {"id":"c-065","fixture":"F2","request":"멍멍이 소리 절반으로 해주세요","category":"clarify","pair":null,"template":"c-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
-{"id":"c-066","fixture":"F1","request":"왼쪽에서 짖는 개 반으로 줄여줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
-{"id":"c-067","fixture":"F1","request":"화면 왼쪽 개 소리 꺼줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
-{"id":"c-068","fixture":"F1","request":"오른쪽에 있는 개 소리만 두 배로","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
+{"id":"c-066","fixture":"F1","request":"왼쪽에서 짖는 개 반으로 줄여줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"set_gain","source_id":"s1","gain":{"ge":0.4,"le":0.6}}],"split":"train"}
+{"id":"c-067","fixture":"F1","request":"화면 왼쪽 개 소리 꺼줘","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"drop","source_id":"s1"}],"split":"train"}
+{"id":"c-068","fixture":"F1","request":"오른쪽에 있는 개 소리만 두 배로","category":"clarify","pair":null,"template":"c-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"set_gain","source_id":"s1","gain":2.0}],"split":"train"}
 {"id":"c-069","fixture":"F1","request":"남자 목소리 너무 시끄러워","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
 {"id":"c-070","fixture":"F1","request":"목소리 살짝만 줄여주세요","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
 {"id":"c-071","fixture":"F1","request":"남자 목소리 좀 줄여줘","category":"clarify","pair":null,"template":"c-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"dev"}
@@ -220,9 +220,9 @@
 {"id":"g-062","fixture":"F4","request":"화면 흑백 필터 적용해줘","category":"none","pair":null,"template":"g-t26","expected":[{"type":"none"}],"split":"dev"}
 {"id":"g-064","fixture":"F2","request":"개소리 볼륨 반으로 줄여줘","category":"clarify","pair":null,"template":"g-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
 {"id":"g-065","fixture":"F2","request":"dog barking 트랙 음소거해줘","category":"clarify","pair":null,"template":"g-t27","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"train"}
-{"id":"g-066","fixture":"F1","request":"화면 왼쪽에서 짖는 개 소리 꺼줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"g-066","fixture":"F1","request":"화면 왼쪽에서 짖는 개 소리 꺼줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"drop","source_id":"s1"}],"split":"dev"}
 {"id":"g-067","fixture":"F1","request":"오른쪽에서 지나가는 차 소리 줄여줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"clarify","reason":"missing_value"}],"split":"dev"}
-{"id":"g-068","fixture":"F1","request":"화면 가운데 서 있는 남자 목소리 음소거해줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"}],"split":"dev"}
+{"id":"g-068","fixture":"F1","request":"화면 가운데 서 있는 남자 목소리 음소거해줘","category":"clarify","pair":null,"template":"g-t28","expected":[{"type":"clarify","reason":"ambiguous_target"},{"type":"drop","source_id":"s3"}],"split":"dev"}
 {"id":"g-069","fixture":"F1","request":"차 지나가는 소리 조금만 줄여줘","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}
 {"id":"g-070","fixture":"F1","request":"개 짖는 소리 너무 시끄러운데 볼륨 좀 낮춰봐","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}
 {"id":"g-071","fixture":"F1","request":"남자 목소리 살짝만 키워줄래?","category":"clarify","pair":null,"template":"g-t29","expected":[{"type":"clarify","reason":"missing_value"}],"split":"train"}

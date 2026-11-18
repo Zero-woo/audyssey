@@ -1,6 +1,6 @@
 # 사람 검수용 표본 30개 (범주별 무작위, seed 0)
 
-맞으면 ✓, 아니면 고칠 정답을 적어 주세요.
+검수 결과(2026-11-18): 20번만 고치고 나머지는 OK.
 
 | # | id | 상태 | 범주 | 요청 | 정답 | 검수 |
 |---|---|---|---|---|---|---|
@@ -23,7 +23,7 @@
 | 17 | x-054 | F1 | none | 이 영상 길이가 몇 초야? | `{"type": "none"}` | |
 | 18 | c-058 | F1 | none | 고마워 수고했어 | `{"type": "none"}` | |
 | 19 | g-060 | F4 | none | 영상 앞부분 3초 잘라내줘 | `{"type": "none"}` | |
-| 20 | c-066 | F1 | clarify | 왼쪽에서 짖는 개 반으로 줄여줘 | `{"type": "clarify", "reason": "ambiguous_target"}` | |
+| 20 | c-066 | F1 | clarify | 왼쪽에서 짖는 개 반으로 줄여줘 | `{"type": "clarify", "reason": "ambiguous_target"}` | 음량 0.5도 허용 (F1은 개 한 마리) |
 | 21 | g-065 | F2 | clarify | dog barking 트랙 음소거해줘 | `{"type": "clarify", "reason": "ambiguous_target"}` | |
 | 22 | g-071 | F1 | clarify | 남자 목소리 살짝만 키워줄래? | `{"type": "clarify", "reason": "missing_value"}` | |
 | 23 | c-071 | F1 | clarify | 남자 목소리 좀 줄여줘 | `{"type": "clarify", "reason": "missing_value"}` | |
