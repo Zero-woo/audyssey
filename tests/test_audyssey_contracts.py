@@ -1,6 +1,6 @@
 import unittest
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from audyssey.contracts import (
     Span,
     VisualHint,
@@ -11,6 +11,10 @@ from audyssey.contracts import (
     SetGain,
     Render,
     parse_command,
+    Clarify,
+    NoCommand,
+    RouteDecision,
+    parse_decision,
 )
 
 
@@ -92,3 +96,24 @@ class ContractsTests(unittest.TestCase):
         self.assertFalse(job.silent)
         self.assertEqual(job.sources[0].origin, "separated")
         self.assertIsNone(job.sources[0].replaces)
+
+    def test_route_decision_parses_by_type(self):
+        self.assertIsInstance(
+            parse_decision({"type": "clarify", "question": "어느 개인가요?", "reason": "ambiguous_target"}),
+            Clarify,
+        )
+        self.assertIsInstance(parse_decision({"type": "none"}), NoCommand)
+        self.assertIsInstance(
+            parse_decision({"type": "set_gain", "source_id": "s1", "gain": 0.5}), SetGain
+        )
+        for data in [
+            {"type": "clarify", "question": "q", "reason": "vague"},
+            {"type": "none", "extra": 1},
+            {"type": "set_gain", "source_id": "s1", "gain": 3},
+            {"type": "delete"},
+        ]:
+            with self.assertRaises(ValidationError):
+                parse_decision(data)
+        schema = TypeAdapter(RouteDecision).json_schema()
+        self.assertIn("oneOf", schema)
+        self.assertEqual(len(schema["oneOf"]), 10)

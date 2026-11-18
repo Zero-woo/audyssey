@@ -182,3 +182,22 @@ Command = Annotated[
 
 def parse_command(data: dict) -> Command:
     return TypeAdapter(Command).validate_python(data)
+
+
+class Clarify(Model):
+    type: Literal["clarify"] = "clarify"
+    question: str  # 사용자에게 보여줄 한 문장
+    reason: Literal[
+        "ambiguous_target", "missing_value", "composite", "unsupported", "other"
+    ]
+
+
+class NoCommand(Model):
+    type: Literal["none"] = "none"
+
+
+RouteDecision = Annotated[Command | Clarify | NoCommand, Field(discriminator="type")]
+
+
+def parse_decision(data: dict) -> RouteDecision:
+    return TypeAdapter(RouteDecision).validate_python(data)
