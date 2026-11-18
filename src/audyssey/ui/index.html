@@ -166,7 +166,7 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .nlfield input::placeholder { color: var(--muted); }
 .nlfield:has(input:disabled) { opacity: .6; }
 .nlc { margin: 10px 14px 10px 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow), inset 3px 0 0 var(--accent); }
-.nlc p { margin: 0 0 8px; font-weight: 500; overflow-wrap: anywhere; }
+.nlc p { margin: 0 0 8px; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
 .nlc .acts, .nlc .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .nlc .chips { margin-bottom: 8px; }
 .nlc p + .acts { margin-top: 2px; }
@@ -950,9 +950,10 @@ function nlEdit() {
 async function nlRun() {
   const d = { ...NL.card.decision }, run = $("nl-run");
   if (NL.input) {
-    const num = NUM[d.type], v = Math.min(num.max, Math.max(num.min, Number(NL.input.value)));
-    if (Number.isNaN(v)) { NL.input.focus(); return; }
-    if (d.type === "set_gain") d.gain = v / 100; else d.semitones = v;
+    const raw = NL.input.value.trim(), num = NUM[d.type];
+    if (raw === "" || !Number.isFinite(Number(raw))) { NL.input.value = ""; NL.input.focus(); toast("값을 숫자로 입력해 주세요.", new Error("빈 값이거나 숫자가 아닙니다.")); return; }
+    const v = Math.min(num.max, Math.max(num.min, Number(raw)));
+    if (d.type === "set_gain") d.gain = v / 100; else d.semitones = Math.round(v);
   }
   run.disabled = true;
   const ok = await send([d], d.source_id || null, ["set_pitch", "reseparate", "generate"].includes(d.type));
