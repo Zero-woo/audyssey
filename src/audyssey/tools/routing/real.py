@@ -78,31 +78,32 @@ def _inline(node, defs: dict):
     return node
 
 
+def tool(name: str, d: dict, fixed: dict | None = None) -> ChatCompletionToolParam:
+    """One command's tool; `fixed` replaces the named properties' schemas."""
+    schema = MODELS[name].model_json_schema()
+    schema["properties"].pop("type", None)
+    if "required" in schema:
+        schema["required"] = [r for r in schema["required"] if r != "type"]
+        if not schema["required"]:
+            del schema["required"]
+    parameters = _inline(schema, schema.get("$defs", {}))
+    parameters.pop("title", None)
+    parameters["properties"] |= fixed or {}
+    description = " ".join(
+        [d["when"], d["instead"], d["params"], *(f"예: {e}" for e in d["examples"])]
+    )
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": parameters,
+        },
+    }
+
+
 def _tools() -> list[ChatCompletionToolParam]:
-    tools: list[ChatCompletionToolParam] = []
-    for name, d in _commands().items():
-        schema = MODELS[name].model_json_schema()
-        schema["properties"].pop("type", None)
-        if "required" in schema:
-            schema["required"] = [r for r in schema["required"] if r != "type"]
-            if not schema["required"]:
-                del schema["required"]
-        parameters = _inline(schema, schema.get("$defs", {}))
-        parameters.pop("title", None)
-        description = " ".join(
-            [d["when"], d["instead"], d["params"], *(f"예: {e}" for e in d["examples"])]
-        )
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": name,
-                    "description": description,
-                    "parameters": parameters,
-                },
-            }
-        )
-    return tools
+    return [tool(name, d) for name, d in _commands().items()]
 
 
 def _system_prompt() -> str:
@@ -121,6 +122,42 @@ def _system_prompt() -> str:
             "",
         ]
     return "\n".join(lines) + RULES
+
+
+def parse(response, use_tools: bool) -> tuple[RouteDecision | None, str | None]:
+    decision, error = None, None
+    try:
+        if not response.choices:
+            raise TypeError("model returned no content")
+        message = response.choices[0].message
+        if use_tools:
+            calls = message.tool_calls or []
+            if len(calls) != 1:
+                raise TypeError(f"expected one tool call, got {len(calls)}")
+            call = calls[0]
+            if (
+                not isinstance(call, ChatCompletionMessageFunctionToolCall)
+                or call.function.name not in MODELS
+            ):
+                raise TypeError("model called an unknown tool")
+            data = {
+                **json.loads(call.function.arguments or "{}"),
+                "type": call.function.name,
+            }
+        else:
+            if not message.content:
+                raise TypeError("model returned no content")
+            data = json.loads(message.content)
+        if not isinstance(data, dict):
+            raise TypeError("output is not a JSON object")
+        decision = parse_decision(data)
+    except json.JSONDecodeError:
+        error = "model output is not valid JSON"
+    except TypeError as e:
+        error = str(e)
+    except ValidationError as e:
+        error = f"model output failed the schema ({e.error_count()} errors)"
+    return decision, error
 
 
 def route(
@@ -171,38 +208,7 @@ def route(
             )
     latency_ms = (time.perf_counter() - start) * 1000
     usage = response.usage
-    decision, error = None, None
-    try:
-        if not response.choices:
-            raise TypeError("model returned no content")
-        message = response.choices[0].message
-        if use_tools:
-            calls = message.tool_calls or []
-            if len(calls) != 1:
-                raise TypeError(f"expected one tool call, got {len(calls)}")
-            call = calls[0]
-            if (
-                not isinstance(call, ChatCompletionMessageFunctionToolCall)
-                or call.function.name not in MODELS
-            ):
-                raise TypeError("model called an unknown tool")
-            data = {
-                **json.loads(call.function.arguments or "{}"),
-                "type": call.function.name,
-            }
-        else:
-            if not message.content:
-                raise TypeError("model returned no content")
-            data = json.loads(message.content)
-        if not isinstance(data, dict):
-            raise TypeError("output is not a JSON object")
-        decision = parse_decision(data)
-    except json.JSONDecodeError:
-        error = "model output is not valid JSON"
-    except TypeError as e:
-        error = str(e)
-    except ValidationError as e:
-        error = f"model output failed the schema ({e.error_count()} errors)"
+    decision, error = parse(response, use_tools)
     return Routed(
         decision,
         error,

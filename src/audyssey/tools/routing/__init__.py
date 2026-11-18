@@ -76,6 +76,17 @@ def guard(job: Job, routed: Routed) -> Routed:
     return replace(routed, decision=clarify, guarded=True)
 
 
+def model_name(settings: Settings) -> str:
+    """Names the whole pipeline; it keys the eval cache and config.json."""
+    if settings.router == "stub":
+        return "stub"
+    model = settings.router_endpoint().model
+    if settings.router != "hybrid":
+        return model
+    escape = "+escape" if settings.router_hybrid_escape else ""
+    return f"hybrid[{settings.router_decision_model}+{model}{escape}]"
+
+
 def load_router(settings: Settings) -> Callable[[str, Job], Routed]:
     route = _load_route(settings)
     if not settings.router_guard:
@@ -86,6 +97,13 @@ def load_router(settings: Settings) -> Callable[[str, Job], Routed]:
 def _load_route(settings: Settings) -> Callable[[str, Job], Routed]:
     if settings.router == "stub":
         return import_module("audyssey.tools.routing.stub").route
+    if settings.router == "hybrid":
+        hybrid_route = import_module("audyssey.tools.routing.hybrid").route
+        url, endpoint = settings.router_decision_url, settings.router_endpoint()
+        escape, effort = settings.router_hybrid_escape, settings.router_reasoning_effort
+        return lambda request, job: hybrid_route(
+            request, job, url, endpoint, escape=escape, reasoning_effort=effort
+        )
     real_route = import_module("audyssey.tools.routing.real").route
     endpoint = settings.router_endpoint()
     effort = settings.router_reasoning_effort

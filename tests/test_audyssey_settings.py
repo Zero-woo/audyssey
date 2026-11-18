@@ -26,6 +26,25 @@ class SettingsTests(unittest.TestCase):
         with patch.dict(os.environ, AUDYSSEY_ROUTER="real"):
             self.assertEqual(Settings().router, "real")
 
+    def test_hybrid_router_settings(self):
+        with self.assertRaisesRegex(ValidationError, "AUDYSSEY_ROUTER_DECISION_URL"):
+            Settings(router="hybrid")
+        Settings(router="hybrid", router_decision_url="http://d")
+        settings = Settings()
+        self.assertEqual(
+            (settings.router_decision_url, settings.router_hybrid_escape,
+             settings.router_decision_model),
+            ("", False, "h2o-lightning-4b"),
+        )
+        env = {"AUDYSSEY_ROUTER": "hybrid", "AUDYSSEY_ROUTER_DECISION_URL": "http://d",
+               "AUDYSSEY_ROUTER_HYBRID_ESCAPE": "true", "AUDYSSEY_ROUTER_DECISION_MODEL": "x"}
+        with patch.dict(os.environ, env):
+            settings = Settings()
+        self.assertEqual(
+            (settings.router, settings.router_hybrid_escape, settings.router_decision_model),
+            ("hybrid", True, "x"),
+        )
+
     def test_router_guard_defaults_off_and_reads_env(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertFalse(Settings().router_guard)

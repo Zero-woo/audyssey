@@ -13,6 +13,7 @@ from audyssey.contracts import (
     Generate,
     Job,
     NoCommand,
+    Render,
     Reseparate,
     SetGain,
     SetPitch,
@@ -21,7 +22,7 @@ from audyssey.contracts import (
 )
 from audyssey.settings import Settings
 from audyssey.tools.routing import Routed, guard, load_router, summarize
-from audyssey.tools.routing import real, stub
+from audyssey.tools.routing import hybrid, model_name, real, stub
 
 
 def make_job() -> Job:
@@ -464,3 +465,201 @@ class GuardTests(unittest.TestCase):
         assert isinstance(out.decision, Clarify)
         self.assertTrue(out.guarded)
 
+
+
+class HybridTests(unittest.TestCase):
+    def setUp(self):
+        self.decision_requests = []
+        self.llm_requests = []
+        self.decision_status = 200
+        self.decision_body = None
+        self.choice = "set_gain"
+        self.target = "s1"
+        self.noul = 0.3
+        self.calls = [("set_gain", {"source_id": "s1", "gain": 0.5})]
+        self.endpoint = Settings(
+            planner_base_url="http://test.invalid/v1",
+            planner_model="fake-model",
+            planner_api_key="fake-key",
+        ).router_endpoint()
+
+    def decide(self, request):
+        self.decision_requests.append(json.loads(request.content))
+        if self.decision_body is not None:
+            return httpx2.Response(self.decision_status, content=self.decision_body)
+        answer = {"type": "choice", "confidence": 1.0, "probabilities": {}}
+        return httpx2.Response(
+            self.decision_status,
+            json={
+                "answers": {
+                    "decision": {**answer, "choice": self.choice},
+                    "target": {**answer, "choice": self.target},
+                    "residual_stem": {"type": "noul", "noul": self.noul},
+                },
+                "usage": {"input_tokens": 100},
+            },
+        )
+
+    def llm(self, request):
+        self.llm_requests.append(json.loads(request.content))
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": f"c{i}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args)},
+                }
+                for i, (name, args) in enumerate(self.calls)
+            ],
+        }
+        return httpx2.Response(
+            200,
+            json={
+                "id": "test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "fake-model",
+                "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                "choices": [{"index": 0, "finish_reason": "tool_calls", "message": message}],
+            },
+        )
+
+    def route(self, escape=False):
+        return hybrid.route(
+            "dog 키워줘",
+            make_job(),
+            "http://decision.invalid",
+            self.endpoint,
+            escape=escape,
+            decision_transport=httpx2.MockTransport(self.decide),
+            llm_transport=httpx2.MockTransport(self.llm),
+        )
+
+    def test_stage_one_only_commands_skip_the_llm(self):
+        cases = [
+            ("none", "s1", 0.3, NoCommand()),
+            (
+                "clarify_missing_value",
+                "s1",
+                0.3,
+                Clarify(reason="missing_value", question="얼마나 바꿀까요?"),
+            ),
+            ("drop", "s2", 0.3, Drop(source_id="s2")),
+            ("render", "s1", 0.7, Render(include_residual_stem=True)),
+            ("render", "s1", 0.3, Render(include_residual_stem=False)),
+        ]
+        for choice, target, noul, expected in cases:
+            with self.subTest(choice=choice, noul=noul):
+                self.choice, self.target, self.noul = choice, target, noul
+                routed = self.route()
+                self.assertEqual(routed.decision, expected)
+                self.assertIsNone(routed.error)
+        self.assertEqual(self.llm_requests, [])
+
+    def test_decision_request_wire_format(self):
+        self.choice = "none"
+        self.route()
+        body = self.decision_requests[0]
+        self.assertEqual(body["state"]["request"], "dog 키워줘")
+        self.assertEqual(body["state"]["job"], summarize(make_job()))
+        questions = body["questions"]
+        self.assertEqual(questions["decision"]["type"], "choice")
+        self.assertEqual(len(questions["decision"]["criteria"]), 14)
+        self.assertEqual(
+            questions["decision"]["criteria"]["clarify_missing_value"],
+            "되물어야 함: 크기나 음높이를 바꾸려는데 양이 없거나 \"조금\"처럼 모호함",
+        )
+        self.assertEqual(
+            questions["target"]["criteria"],
+            {
+                "s1": "dog (sfx, 켜짐)",
+                "s2": "car (sfx, 켜짐)",
+                "residual": "residual: 분리되지 않고 남은 나머지 소리",
+            },
+        )
+        self.assertEqual(questions["residual_stem"]["type"], "noul")
+
+    def test_set_gain_fills_value_with_one_tool(self):
+        routed = self.route()
+        self.assertEqual(routed.decision, SetGain(source_id="s1", gain=0.5))
+        body = self.llm_requests[0]
+        self.assertEqual([t["function"]["name"] for t in body["tools"]], ["set_gain"])
+        props = body["tools"][0]["function"]["parameters"]["properties"]
+        self.assertEqual(props["source_id"], {"enum": ["s1"]})
+        self.assertEqual(body["tool_choice"], "required")
+        self.assertEqual(body["temperature"], 0)
+        user = json.loads(body["messages"][1]["content"])
+        self.assertEqual(user["decided"], {"type": "set_gain", "source_id": "s1"})
+        self.assertEqual(user["request"], "dog 키워줘")
+
+    def test_escape_adds_clarify_tool(self):
+        self.calls = [("clarify", {"reason": "missing_value", "question": "얼마나요?"})]
+        routed = self.route(escape=True)
+        self.assertEqual(
+            routed.decision, Clarify(reason="missing_value", question="얼마나요?")
+        )
+        tools = self.llm_requests[0]["tools"]
+        self.assertEqual([t["function"]["name"] for t in tools], ["set_gain", "clarify"])
+        reason = tools[1]["function"]["parameters"]["properties"]["reason"]
+        self.assertEqual(reason["enum"], ["missing_value"])
+        self.assertIn("clarify", self.llm_requests[0]["messages"][0]["content"])
+
+    def test_clarify_not_offered_without_escape(self):
+        self.calls = [("clarify", {"reason": "missing_value", "question": "q"})]
+        routed = self.route()
+        self.assertIsNone(routed.decision)
+        assert routed.error is not None
+
+    def test_wrong_type_is_an_error(self):
+        self.calls = [("drop", {"source_id": "s1"})]
+        routed = self.route()
+        self.assertIsNone(routed.decision)
+        assert routed.error is not None
+
+    def test_decision_server_failure_is_an_error_without_retry(self):
+        for status, body in [(500, b"boom"), (200, b"not json"), (200, b"{}")]:
+            with self.subTest(status=status, body=body):
+                self.decision_requests.clear()
+                self.decision_status, self.decision_body = status, body
+                routed = self.route()
+                self.assertIsNone(routed.decision)
+                self.assertEqual(routed.error, "decision server failed")
+                self.assertEqual(len(self.decision_requests), 1)
+        self.assertEqual(self.llm_requests, [])
+
+    def test_latency_and_tokens_are_summed(self):
+        routed = self.route()
+        self.assertEqual((routed.input_tokens, routed.output_tokens), (107, 3))
+        self.assertGreater(routed.latency_ms, 0)
+        self.choice = "none"
+        routed = self.route()
+        self.assertEqual((routed.input_tokens, routed.output_tokens), (100, 0))
+
+    def test_model_name_separates_escape(self):
+        base = {"router": "hybrid", "router_decision_url": "http://d", "router_model": "m"}
+        off = model_name(Settings(**base))
+        on = model_name(Settings(**base, router_hybrid_escape=True))
+        self.assertEqual(off, "hybrid[h2o-lightning-4b+m]")
+        self.assertEqual(on, "hybrid[h2o-lightning-4b+m+escape]")
+        self.assertEqual(model_name(Settings(router="stub")), "stub")
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+
+        self.assertNotEqual(
+            _cache_file(Path("c"), off, "c1", 0, "tools"),
+            _cache_file(Path("c"), on, "c1", 0, "tools"),
+        )
+
+    def test_load_router_hybrid(self):
+        settings = Settings(
+            router="hybrid",
+            router_decision_url="http://decision.invalid",
+            planner_base_url="http://test.invalid/v1",
+        )
+        with patch.object(hybrid, "route") as route:
+            load_router(settings)("dog 꺼줘", make_job())
+        self.assertEqual(route.call_args.args[3], settings.router_endpoint())
+        self.assertEqual(route.call_args.args[1], make_job())

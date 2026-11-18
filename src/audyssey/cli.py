@@ -16,7 +16,7 @@ from audyssey.routing_eval import (
     uncached_calls,
 )
 from audyssey.settings import Settings
-from audyssey.tools.routing import load_router
+from audyssey.tools.routing import load_router, model_name
 from audyssey.toolserver import create_tool_app
 
 
@@ -67,7 +67,7 @@ MAX_TEST_OPENS = 3
 def eval_routing(
     out: Annotated[Path, typer.Option()],
     split: Annotated[Literal["train", "dev", "test"], typer.Option()],
-    router: Annotated[Literal["stub", "real"], typer.Option()] = "stub",
+    router: Annotated[Literal["stub", "real", "hybrid"], typer.Option()] = "stub",
     k: int = 5,
     yes: bool = False,
     cases: Path = Path("evals/routing/cases.jsonl"),
@@ -89,9 +89,9 @@ def eval_routing(
     if not selected:
         raise fail(f"no cases in split {split}")
     settings = Settings().model_copy(update={"router": router})
-    model = "stub" if router == "stub" else settings.router_endpoint().model
+    model = model_name(settings)
     cache = cases.parent / "cache"
-    if router == "real":
+    if router != "stub":
         calls = uncached_calls(model, selected, k, cache, settings.router_format)
         if not yes:
             raise fail(
@@ -115,11 +115,11 @@ def eval_routing(
         fixtures,
         k,
         out,
-        cache if router == "real" else None,
+        cache if router != "stub" else None,
         settings.router_format,
         guard,
     )
-    if router == "real" and split == "test":
+    if router != "stub" and split == "test":
         entry = {
             "date": datetime.now(UTC).isoformat(),
             "model": model,

@@ -399,7 +399,7 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `AUDYSSEY_PLANNER` | `stub` | `stub` 또는 `real` (Compose 기본 `real`) |
-| `AUDYSSEY_ROUTER` | `stub` | `stub` 또는 `real`. 자연어 편집 요청을 명령으로 바꾸는 라우터 |
+| `AUDYSSEY_ROUTER` | `stub` | `stub`, `real` 또는 `hybrid`. 자연어 편집 요청을 명령으로 바꾸는 라우터 |
 | `AUDYSSEY_SEPARATOR` / `AUDYSSEY_FILTER` / `AUDYSSEY_GROUNDER` | `stub` | `stub`, `real`, `remote` (Compose 기본 `remote`) |
 | `AUDYSSEY_SEPARATOR_URL` / `AUDYSSEY_FILTER_URL` / `AUDYSSEY_GROUNDING_URL` | 빈 값 | remote 도구 서버 주소. remote인데 비어 있으면 시작할 때 오류 |
 | `AUDYSSEY_TOOL_TOKEN` | 빈 값 | 도구 서버 Bearer 토큰. main과 도구 서버에 같은 값 |
@@ -424,6 +424,9 @@ API의 `analyze()`와 Studio는 같은 `build_graph()`로 생성한 그래프를
 |---|---|---|
 | `AUDYSSEY_ROUTER_REASONING_EFFORT` | (비움) | `none`/`low`/`medium`/`high`. 비우면 보내지 않음. Gemini(OpenAI 호환)에서 `none`이면 thinking을 꺼 지연이 줄어듦 |
 | `AUDYSSEY_ROUTER_FORMAT` | `tools` | `tools` 또는 `json_schema`. `tools`는 명령마다 함수 하나를 주고 모델이 하나를 호출(function calling), `json_schema`는 구조화 출력으로 JSON 하나를 받음. 비교용으로 남겨 둠 |
+| `AUDYSSEY_ROUTER_DECISION_URL` | (비움) | `AUDYSSEY_ROUTER=hybrid`일 때 필수. 결정 모델 서버 주소(`POST <url>/v1/systemone`). hybrid는 결정 모델이 명령 종류와 대상 소스를 고르고, 라우터 모델은 값(gain, 음높이, add_source 계획)이 필요한 명령에만 도구 하나로 호출함 |
+| `AUDYSSEY_ROUTER_DECISION_MODEL` | `h2o-lightning-4b` | 실행 이름과 캐시 키에만 쓰는 결정 모델 이름. 서버로 보내지 않음 |
+| `AUDYSSEY_ROUTER_HYBRID_ESCAPE` | `false` | 켜면 값 채우기 단계에 `clarify(missing_value)` 도구를 함께 줌. 캐시 키가 달라짐 |
 | `AUDYSSEY_ROUTER_GUARD` | `false` | 기본 꺼짐. 켜면 작업이 실행할 수 없는 명령을 되묻기(clarify)로 바꿈 |
 | `AUDYSSEY_ROUTER_API` / `_BASE_URL` / `_MODEL` / `_API_KEY` | 플래너 값 | `AUDYSSEY_ROUTER=real`일 때 쓰는 라우터 모델. 뜻은 같은 이름의 `AUDYSSEY_PLANNER_*`와 같고, 비우면 플래너 값을 씀. API는 `openai` 또는 `openrouter`만 가능(`gemini`면 시작할 때 오류) |
 
