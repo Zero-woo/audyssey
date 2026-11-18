@@ -36,7 +36,12 @@ def load_fixture(root: Path, name: str) -> Job:
 def assign_splits(cases: list[Case], seed: int = 0) -> list[Case]:
     """Split by template (never by case) within each category, about 40/30/30."""
     templates: dict[str, set[str]] = defaultdict(set)
+    category_of: dict[str, str] = {}
     for c in cases:
+        if category_of.setdefault(c.template, c.category) != c.category:
+            raise ValueError(
+                f"template {c.template!r} appears under more than one category"
+            )
         templates[c.category].add(c.template)
     split_of: dict[tuple[str, str], Literal["train", "dev", "test"]] = {}
     rng = random.Random(seed)

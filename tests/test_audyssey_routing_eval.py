@@ -105,6 +105,11 @@ class SplitTests(unittest.TestCase):
         b = assign_splits(list(reversed(cases)))
         self.assertEqual({c.id: c.split for c in a}, {c.id: c.split for c in b})
 
+    def test_template_in_two_categories_rejected(self) -> None:
+        cases = [make_case(1, "shared", "positive"), make_case(2, "shared", "none")]
+        with self.assertRaisesRegex(ValueError, "shared"):
+            assign_splits(cases)
+
     def test_ratio_per_category(self) -> None:
         for cat in ("positive", "none"):
             templates = defaultdict(set)
