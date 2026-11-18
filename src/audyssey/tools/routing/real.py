@@ -74,7 +74,9 @@ def route(
     usage = response.usage
     decision, error = None, None
     try:
-        data = json.loads(response.choices[0].message.content or "")
+        if not response.choices or not response.choices[0].message.content:
+            raise TypeError("model returned no content")
+        data = json.loads(response.choices[0].message.content)
         if not isinstance(data, dict):
             raise TypeError("output is not a JSON object")
         decision = parse_decision(data)

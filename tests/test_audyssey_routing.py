@@ -157,6 +157,23 @@ class RealRouterTests(unittest.TestCase):
             self.assertNotIn("secret", routed.error)
             self.assertEqual(len(self.requests), 1)
 
+    def test_empty_choices_is_an_error_without_retry(self):
+        def respond(request):
+            self.requests.append(json.loads(request.content))
+            return httpx2.Response(200, json={
+                "id": "test", "object": "chat.completion", "created": 0,
+                "model": "fake-model", "choices": [],
+            })
+
+        routed = real.route(
+            "secret request text", make_job(), self.endpoint,
+            transport=httpx2.MockTransport(respond),
+        )
+        self.assertIsNone(routed.decision)
+        assert routed.error is not None
+        self.assertNotIn("secret", routed.error)
+        self.assertEqual(len(self.requests), 1)
+
     def test_tracing_is_disabled_during_call(self):
         self.route()
         self.assertEqual(self.tracing, [False])
