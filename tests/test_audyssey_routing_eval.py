@@ -87,7 +87,7 @@ class LoadCasesTests(unittest.TestCase):
             self.load(category="weird")
 
     def test_shipped_examples_load(self) -> None:
-        cases = load_cases(ROOT / "cases.jsonl")
+        cases = load_cases(ROOT / "docs" / "format_examples.jsonl")
         self.assertEqual([c.id for c in cases], [f"ex-{i}" for i in range(1, 6)])
 
 
