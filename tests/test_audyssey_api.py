@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from tests.audyssey_media import make_video
 from audyssey.api import create_app
 from audyssey.settings import Settings
+from audyssey.tools.routing import Routed
 
 
 class ApiTests(unittest.TestCase):
@@ -314,3 +315,51 @@ class ApiTests(unittest.TestCase):
         response = self.command(job["id"], {"type": "generate", "source_id": "s3"})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["sources"][-1]["origin"], "generated")
+
+    def route(self, job_id, request):
+        return self.client.post(f"/api/jobs/{job_id}/route", json={"request": request})
+
+    def snapshot(self, job_id):
+        folder = self.root / "jobs" / job_id
+        files = {p: p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file()}
+        return self.client.get(f"/api/jobs/{job_id}").json()["version"], files
+
+    def test_route_is_read_only(self):
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        before = self.snapshot(job_id)
+        response = self.route(job_id, "이 영상 몇 분이야?")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertRegex(body["route_id"], "^[0-9a-f]{32}$")
+        self.assertEqual(body["decision"], {"type": "none"})
+        self.assertEqual(self.snapshot(job_id), before)
+
+    def test_route_rejects_bad_request_and_unknown_job(self):
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        for request in ["", "  ", "x" * 501]:
+            self.assertEqual(self.route(job_id, request).status_code, 422)
+        self.assertEqual(self.route("nope", "  ").status_code, 422)
+        self.assertEqual(self.route("nope", "dog 꺼줘").status_code, 404)
+
+    def test_route_error_is_502_without_request_text(self):
+        def broken(request, job):
+            return Routed(None, f"bad {request}", 0, 0, 0)
+
+        app = create_app(Settings(work_dir=self.root / "jobs"), router=broken)
+        client = TestClient(app)
+        self.addCleanup(client.close)
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        response = client.post(f"/api/jobs/{job_id}/route", json={"request": "secret"})
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("secret", response.text)
+
+    def test_route_works_while_job_is_busy(self):
+        job_id = self.upload()
+        self.wait(job_id, "new")
+        lock = self.app.state.locks.setdefault(job_id, threading.Lock())
+        lock.acquire(blocking=False)
+        self.addCleanup(lambda: lock.locked() and lock.release())
+        self.assertEqual(self.route(job_id, "dog 꺼줘").status_code, 200)

@@ -1,5 +1,7 @@
 import asyncio
+from collections.abc import Callable
 import zipfile
+from uuid import uuid4
 from importlib.resources import files
 from tempfile import TemporaryDirectory
 from threading import Lock, Thread
@@ -24,10 +26,16 @@ from audyssey.settings import Settings
 from audyssey.store import JobStore
 from audyssey.uploads import save_upload
 from audyssey.tools import Tools, load_tools
+from audyssey.tools.routing import Routed, load_router
 
 
-def create_app(settings: Settings | None = None, tools: Tools | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    tools: Tools | None = None,
+    router: Callable[[str, Job], Routed] | None = None,
+) -> FastAPI:
     settings = settings or Settings()
+    route = router or load_router(settings)
     ctx = Context(tools or load_tools(settings), settings, JobStore(settings.work_dir))
     app = FastAPI()
     app.state.ctx = ctx
@@ -118,6 +126,19 @@ def create_app(settings: Settings | None = None, tools: Tools | None = None) -> 
                     yield f"data: {job.model_dump_json()}\n\n"
 
         return StreamingResponse(stream(), media_type="text/event-stream")
+
+    @app.post("/api/jobs/{job_id}/route")
+    def route_request(
+        job_id: str, request: str = Body(..., embed=True, min_length=1, max_length=500)
+    ) -> dict:
+        # Read-only: a snapshot, no lock, no save. The UI sends the chosen command to /commands.
+        if not request.strip():
+            raise HTTPException(422, "request is empty")
+        job = load(job_id)
+        routed = route(request, job)
+        if routed.decision is None:
+            raise HTTPException(502, "router returned an invalid decision")
+        return {"route_id": uuid4().hex, "decision": routed.decision.model_dump()}
 
     @app.post("/api/jobs/{job_id}/commands")
     def command(job_id: str, data: dict = Body(...)) -> Job:
