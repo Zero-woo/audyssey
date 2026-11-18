@@ -86,6 +86,21 @@ class LoadCasesTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.load(category="weird")
 
+    def test_unknown_expected_type_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.load(expected=[{"type": "set_volume"}])
+
+    def test_expected_without_type_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.load(expected=[{"source_id": "s1"}])
+
+    def test_bad_clarify_reason_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.load(expected=[{"type": "clarify", "reason": "no idea"}])
+
+    def test_valid_clarify_reason_loads(self) -> None:
+        self.load(expected=[{"type": "clarify", "reason": "missing_value"}])
+
     def test_shipped_examples_load(self) -> None:
         cases = load_cases(ROOT / "docs" / "format_examples.jsonl")
         self.assertEqual([c.id for c in cases], [f"ex-{i}" for i in range(1, 6)])

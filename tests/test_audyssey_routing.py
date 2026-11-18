@@ -184,7 +184,8 @@ class RealRouterTests(unittest.TestCase):
             .joinpath("descriptions.json")
             .read_text(encoding="utf-8")
         )
-        self.assertIsInstance(data["version"], int)
+        self.assertEqual(data["version"], 2)
+        self.assertNotIn("제한", data["commands"]["set_gain"]["params"])
         commands = data["commands"]
         self.assertEqual(len(commands), 10)
         self.assertEqual(

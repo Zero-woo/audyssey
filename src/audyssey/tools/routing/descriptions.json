@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "commands": {
     "keep": {
       "when": "끈 소스를 다시 켜서 최종 믹스에 넣고 싶을 때 씁니다. \"다시 켜줘\", \"살려줘\", \"되돌려줘\"처럼 소스를 복구하는 요청이 해당합니다. 소스의 gain과 pitch는 그대로 유지됩니다. residual(id \"residual\")에도 쓸 수 있습니다.",
@@ -18,17 +18,17 @@
       ]
     },
     "set_gain": {
-      "when": "소스의 소리 크기를 바꾸고 싶을 때 씁니다. \"키워줘\", \"줄여줘\", \"작게\", \"두 배로\"처럼 크기를 조절하는 요청이 해당합니다. 값은 job의 gain에 배수를 곱한 절대 gain으로 적습니다. residual에도 쓸 수 있습니다.",
+      "when": "소스의 소리 크기를 바꾸고 싶을 때 씁니다. \"두 배로\", \"반으로\", \"30%로\"처럼 크기를 명시한 요청이 해당합니다. 값은 job의 gain에 배수를 곱한 절대 gain으로 적습니다. residual에도 쓸 수 있습니다.",
       "instead": "완전히 끄는 요청은 drop을 씁니다. 음높이를 바꾸는 요청은 set_pitch를 씁니다.",
-      "params": "gain은 0~2이고 1이 원래 크기입니다. \"반으로\"는 현재 gain의 0.5배, \"두 배로\"는 2배이며 2를 넘으면 2로 제한합니다. 정도 표현이 없으면 clarify를 씁니다.",
+      "params": "gain은 0~2이고 1이 원래 크기입니다. \"반으로\"는 현재 gain의 0.5배, \"두 배로\"는 2배입니다. 양이 없거나 \"조금\"처럼 모호하면 clarify missing_value, 범위 밖이면 clarify unsupported를 씁니다.",
       "examples": [
         "gain 0.8인 s1, \"반으로 줄여줘\" -> {\"type\":\"set_gain\",\"source_id\":\"s1\",\"gain\":0.4}"
       ]
     },
     "set_pitch": {
-      "when": "소스의 음높이를 바꾸고 싶을 때 씁니다. \"음을 올려줘\", \"한 키 낮게\", \"옥타브 위로\"가 해당합니다. 값은 job의 pitch_semitones에 요청한 변화량을 더한 절대 값으로 적습니다.",
-      "instead": "크기를 바꾸는 요청은 set_gain을 씁니다. residual에는 쓸 수 없고, residual의 음높이 요청은 지원하지 않는 요청으로 clarify를 씁니다.",
-      "params": "semitones는 -12~12입니다. \"한 키\"는 1 semitone, \"반음\"은 1, \"옥타브\"는 12입니다. 올리면 양수, 내리면 음수입니다.",
+      "when": "소스의 음높이를 바꾸고 싶을 때 씁니다. \"음을 올려줘\", \"한 키 낮게\", \"옥타브 위로\"가 해당합니다. 값은 job의 pitch_semitones에 변화량을 더한 절대 값입니다.",
+      "instead": "크기를 바꾸는 요청은 set_gain을 씁니다. residual의 음높이 요청은 clarify unsupported를 씁니다.",
+      "params": "semitones는 -12~12입니다. \"한 키\"와 \"반음\"은 1, \"옥타브\"는 12입니다. 올리면 양수, 내리면 음수입니다. 양이 없거나 모호하면 clarify missing_value, 범위 밖이면 clarify unsupported를 씁니다.",
       "examples": [
         "pitch_semitones 2인 s1, \"한 키 올려줘\" -> {\"type\":\"set_pitch\",\"source_id\":\"s1\",\"semitones\":3}"
       ]
@@ -66,11 +66,11 @@
       ]
     },
     "clarify": {
-      "when": "명령을 하나로 정할 수 없을 때 한 문장으로 되묻습니다. ambiguous_target은 대상이 둘 이상이거나 \"왼쪽\"처럼 화면 위치로 가리킬 때, missing_value는 값이 빠졌을 때, composite는 편집이 둘 이상일 때입니다.",
-      "instead": "unsupported는 대사 재생성, 무음 영상 재분리처럼 실행 불가로 알려진 요청입니다. 편집과 무관한 질문은 none입니다. 그 밖은 other입니다.",
-      "params": "question은 사용자에게 보여줄 한 문장이고 요청과 같은 언어입니다. reason은 이 항목에 적은 다섯 값 중 하나입니다.",
+      "when": "명령을 하나로 정할 수 없을 때 한 문장으로 되묻습니다. ambiguous_target은 대상이 둘 이상이거나 \"왼쪽\"처럼 화면 위치로 가리킬 때, missing_value는 양이 없거나 \"조금\"처럼 모호할 때, composite는 편집이 둘 이상일 때입니다.",
+      "instead": "unsupported는 대사 재생성, 무음 영상 재분리, 범위 밖 값처럼 실행할 수 없는 요청이며 범위 밖이면 최대값을 제안합니다. 편집과 무관한 질문은 none, 그 밖은 other입니다.",
+      "params": "question은 사용자에게 보여줄 한 문장이고 요청과 같은 언어입니다. reason은 적어 둔 다섯 값 중 하나입니다.",
       "examples": [
-        "\"줄여줘\"(소스 둘) -> {\"type\":\"clarify\",\"question\":\"어느 소리요?\",\"reason\":\"ambiguous_target\"}"
+        "\"개 소리 줄여줘\" -> {\"type\":\"clarify\",\"question\":\"얼마나 줄일까요?\",\"reason\":\"missing_value\"}"
       ]
     },
     "none": {

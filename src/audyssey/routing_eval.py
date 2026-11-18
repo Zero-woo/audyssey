@@ -10,7 +10,9 @@ from datetime import UTC, datetime
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
+
+from pydantic import TypeAdapter, field_validator
 
 from audyssey import graph
 from audyssey.contracts import (
@@ -25,6 +27,12 @@ from audyssey.tools import routing
 from audyssey.tools.routing import Routed
 
 
+DECISION_TYPES = set(
+    TypeAdapter(RouteDecision).json_schema()["discriminator"]["mapping"]
+)
+CLARIFY_REASONS = set(get_args(Clarify.model_fields["reason"].annotation))
+
+
 class Case(Model):
     id: str
     fixture: Literal["F1", "F2", "F3", "F4", "F5"]
@@ -36,6 +44,19 @@ class Case(Model):
     template: str
     expected: list[dict]
     split: Literal["train", "dev", "test"] | None = None
+
+    @field_validator("expected")
+    @classmethod
+    def _check_expected(cls, expected: list[dict]) -> list[dict]:
+        for entry in expected:
+            if entry.get("type") not in DECISION_TYPES:
+                raise ValueError(f"unknown expected type: {entry.get('type')!r}")
+            if (
+                entry["type"] == "clarify"
+                and entry.get("reason", "other") not in CLARIFY_REASONS
+            ):
+                raise ValueError(f"unknown clarify reason: {entry['reason']!r}")
+        return expected
 
 
 def load_cases(path: Path) -> list[Case]:
