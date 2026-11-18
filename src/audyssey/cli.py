@@ -91,7 +91,7 @@ def eval_routing(
     model = "stub" if router == "stub" else settings.router_endpoint().model
     cache = cases.parent / "cache"
     if router == "real":
-        calls = uncached_calls(model, selected, k, cache)
+        calls = uncached_calls(model, selected, k, cache, settings.router_format)
         if not yes:
             raise fail(
                 f"{calls} uncached calls, about {calls * INPUT_TOKENS_PER_CALL} "
@@ -115,6 +115,7 @@ def eval_routing(
         k,
         out,
         cache if router == "real" else None,
+        settings.router_format,
     )
     if router == "real" and split == "test":
         entry = {

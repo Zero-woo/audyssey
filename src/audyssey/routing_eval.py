@@ -316,14 +316,16 @@ def _descriptions() -> tuple[str, int]:
     return hashlib.sha256(raw).hexdigest(), json.loads(raw)["version"]
 
 
-def _cache_file(cache: Path, model: str, case_id: str, rep: int) -> Path:
-    key = json.dumps([model, _descriptions()[0], case_id, rep])
+def _cache_file(cache: Path, model: str, case_id: str, rep: int, fmt: str) -> Path:
+    key = json.dumps([model, fmt, _descriptions()[0], case_id, rep])
     return cache / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
 
 
-def uncached_calls(model: str, cases: list[Case], k: int, cache: Path) -> int:
+def uncached_calls(
+    model: str, cases: list[Case], k: int, cache: Path, fmt: str = "tools"
+) -> int:
     return sum(
-        not _cache_file(cache, model, c.id, rep).exists()
+        not _cache_file(cache, model, c.id, rep, fmt).exists()
         for c in cases
         for rep in range(k)
     )
@@ -356,9 +358,10 @@ def _run_one(
     job: Job,
     rep: int,
     cache: Path | None,
+    fmt: str,
 ) -> Run:
     hit: dict
-    path = None if cache is None else _cache_file(cache, model, case.id, rep)
+    path = None if cache is None else _cache_file(cache, model, case.id, rep, fmt)
     if path is not None and path.exists():
         hit = json.loads(path.read_text())
     else:
@@ -441,13 +444,14 @@ def run_eval(
     k: int,
     out: Path,
     cache: Path | None,
+    fmt: str = "tools",
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
     if out.exists():
         raise FileExistsError(out)
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
-        _run_one(router, model, c, jobs[c.fixture], rep, cache)
+        _run_one(router, model, c, jobs[c.fixture], rep, cache, fmt)
         for c in cases
         for rep in range(k)
     ]
@@ -481,6 +485,7 @@ def run_eval(
             {
                 "model": model,
                 "router": router_name,
+                "format": fmt,
                 "descriptions_version": version,
                 "descriptions_sha256": sha,
                 "git_sha": git_sha(),

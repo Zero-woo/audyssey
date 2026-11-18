@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     router_api_key: str | None = Field(default=None, repr=False)
     # Unlike the fields above there is no planner fallback: None sends nothing.
     router_reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
+    # tools: one function call per decision type; json_schema: structured output.
+    router_format: Literal["tools", "json_schema"] = "tools"
     max_plan_rounds: int = Field(default=2, ge=1)
     max_separation_retries: int = Field(default=2, ge=0)
     max_duration_s: float = Field(default=30, gt=0)

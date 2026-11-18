@@ -77,6 +77,27 @@ class RoutingTests(unittest.TestCase):
         route.assert_called_once()
         self.assertEqual(route.call_args.args[2], settings.router_endpoint())
 
+    def test_router_format_setting(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(Settings().router_format, "tools")
+        with patch.dict(os.environ, {"AUDYSSEY_ROUTER_FORMAT": "json_schema"}, clear=True):
+            self.assertEqual(Settings().router_format, "json_schema")
+        with self.assertRaises(ValueError):
+            Settings.model_validate({"router_format": "xml"})
+
+    def test_load_router_real_passes_format(self):
+        with patch.object(real, "route") as route:
+            for fmt in ("json_schema", "tools"):
+                settings = Settings(
+                    router="real",
+                    router_format=fmt,
+                    planner_base_url="http://test.invalid/v1",
+                    planner_model="m",
+                    planner_api_key="k",
+                )
+                load_router(settings)("dog 꺼줘", make_job())
+                self.assertEqual(route.call_args.kwargs["fmt"], fmt)
+
     def test_load_router_real_passes_reasoning_effort(self):
         with patch.object(real, "route") as route:
             for effort in ("none", None):
@@ -131,6 +152,7 @@ class RealRouterTests(unittest.TestCase):
         )
 
     def route(self, request="dog 꺼줘", **kwargs):
+        kwargs.setdefault("fmt", "json_schema")
         return real.route(
             request,
             make_job(),
@@ -218,3 +240,155 @@ class RealRouterTests(unittest.TestCase):
             text = [entry["when"], entry["instead"], entry["params"], *entry["examples"]]
             self.assertLessEqual(sum(map(len, text)), 400, name)
             self.assertNotIn("하지 마", entry["instead"], name)
+
+
+def _descriptions() -> dict:
+    return json.loads(
+        importlib.resources.files("audyssey.tools.routing")
+        .joinpath("descriptions.json")
+        .read_text(encoding="utf-8")
+    )["commands"]
+
+
+class ToolsRouterTests(unittest.TestCase):
+    def setUp(self):
+        self.requests = []
+        self.calls = [("drop", {"source_id": "s1"})]
+        self.content = None
+        self.endpoint = Settings(
+            planner_base_url="http://test.invalid/v1",
+            planner_model="fake-model",
+            planner_api_key="fake-key",
+        ).router_endpoint()
+
+    def respond(self, request):
+        self.requests.append(json.loads(request.content))
+        message = {
+            "role": "assistant",
+            "content": self.content,
+            "tool_calls": [
+                {
+                    "id": f"c{i}",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": args if isinstance(args, str) else json.dumps(args),
+                    },
+                }
+                for i, (name, args) in enumerate(self.calls)
+            ]
+            or None,
+        }
+        return httpx2.Response(
+            200,
+            json={
+                "id": "test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "fake-model",
+                "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+                "choices": [{"index": 0, "finish_reason": "tool_calls", "message": message}],
+            },
+        )
+
+    def route(self, request="dog 꺼줘", **kwargs):
+        return real.route(
+            request,
+            make_job(),
+            self.endpoint,
+            transport=httpx2.MockTransport(self.respond),
+            **kwargs,
+        )
+
+    def test_request_sends_ten_tools_and_requires_one(self):
+        self.route()
+        body = self.requests[0]
+        commands = _descriptions()
+        tools = body["tools"]
+        self.assertEqual([t["type"] for t in tools], ["function"] * 10)
+        self.assertEqual([t["function"]["name"] for t in tools], list(commands))
+        for t in tools:
+            name = t["function"]["name"]
+            self.assertIn(commands[name]["when"], t["function"]["description"])
+            self.assertIn("예: " + commands[name]["examples"][0], t["function"]["description"])
+            self.assertNotIn("strict", t["function"])
+            self.assertNotIn("type", t["function"]["parameters"].get("properties", {}))
+        self.assertEqual(body["tool_choice"], "required")
+        self.assertNotIn("response_format", body)
+        self.assertEqual(body["temperature"], 0)
+
+    def test_no_ref_in_parameters(self):
+        self.route()
+        for t in self.requests[0]["tools"]:
+            text = json.dumps(t["function"]["parameters"])
+            self.assertNotIn("$ref", text)
+            self.assertNotIn("$defs", text)
+        add_source = next(
+            t for t in self.requests[0]["tools"] if t["function"]["name"] == "add_source"
+        )
+        self.assertIn("plan", add_source["function"]["parameters"]["properties"])
+
+    def test_system_prompt_does_not_repeat_descriptions(self):
+        self.route()
+        system = self.requests[0]["messages"][0]["content"]
+        self.assertNotIn(_descriptions()["set_gain"]["when"], system)
+        self.assertIn("residual", system)
+
+    def test_tool_calls_parse(self):
+        for name, args, expected in [
+            ("set_gain", {"source_id": "s1", "gain": 0.5}, SetGain(source_id="s1", gain=0.5)),
+            ("clarify", {"question": "어느 소리?", "reason": "ambiguous_target"},
+             Clarify(question="어느 소리?", reason="ambiguous_target")),
+            ("none", {}, NoCommand()),
+        ]:
+            self.calls = [(name, args)]
+            routed = self.route()
+            self.assertEqual(routed.decision, expected)
+            self.assertIsNone(routed.error)
+            self.assertEqual((routed.input_tokens, routed.output_tokens), (7, 3))
+
+    def test_bad_responses_are_errors_without_retry(self):
+        cases = {
+            "text only": ([], "그냥 답변"),
+            "two calls": ([("drop", {"source_id": "s1"}), ("none", {})], None),
+            "bad json": ([("drop", "not json")], None),
+            "non-object": ([("drop", "[1]")], None),
+            "unknown name": ([("explode", {})], None),
+            "invalid": ([("set_gain", {"source_id": "s1", "gain": 3})], None),
+        }
+        for label, (calls, content) in cases.items():
+            self.requests.clear()
+            self.calls, self.content = calls, content
+            routed = self.route("secret request text")
+            self.assertIsNone(routed.decision, label)
+            assert routed.error is not None
+            self.assertNotIn("secret", routed.error)
+            self.assertEqual(len(self.requests), 1, label)
+
+    def test_json_schema_mode_is_unchanged(self):
+        self.content = '{"type": "drop", "source_id": "s1"}'
+        self.calls = []
+        routed = self.route(fmt="json_schema")
+        self.assertEqual(routed.decision, Drop(source_id="s1"))
+        body = self.requests[0]
+        self.assertEqual(body["response_format"]["type"], "json_schema")
+        self.assertNotIn("tools", body)
+        self.assertNotIn("tool_choice", body)
+        self.assertNotIn("지원하지 않는 요청은 none 또는", body["messages"][0]["content"])
+
+
+class CacheKeyTests(unittest.TestCase):
+    def test_cache_key_differs_between_formats(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+
+        root = Path("cache")
+        self.assertNotEqual(
+            _cache_file(root, "m", "c1", 0, "tools"),
+            _cache_file(root, "m", "c1", 0, "json_schema"),
+        )
+        self.assertEqual(
+            _cache_file(root, "m", "c1", 0, "tools"),
+            _cache_file(root, "m", "c1", 0, "tools"),
+        )
