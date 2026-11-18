@@ -159,18 +159,27 @@ svg.flow { display: block; width: 100%; height: auto; min-width: 920px; }
 .transport .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 /* natural-language edit bar */
-.nlbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px 10px 12px; box-shadow: 0 1px 0 var(--line); }
-.nlfield { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
-.nlfield:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.nlfield input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--ink); padding: 0; outline: none; }
+.nlbar { padding: 10px 14px 6px 12px; box-shadow: 0 1px 0 var(--line); }
+.nlfield { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 6px 5px 12px; border-radius: calc(var(--r) + 2px); background: var(--surface); box-shadow: inset 0 0 0 1px var(--control-off); transition-property: box-shadow; transition-duration: 150ms; }
+.nlfield > svg.i { color: var(--accent); }
+.nlfield:focus-within { outline: 2px solid var(--accent); outline-offset: 0; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft); }
+.nlfield input { flex: 1; min-width: 0; height: 32px; border: 0; background: none; color: var(--ink); padding: 0; outline: none; font-size: 15px; }
 .nlfield input::placeholder { color: var(--muted); }
 .nlfield:has(input:disabled) { opacity: .6; }
+.nlsend { flex: none; width: 32px; height: 32px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: var(--accent); color: #fff; transition-property: scale, background-color, color; transition-duration: 150ms; transition-timing-function: ease-out; }
+.nlsend:disabled { background: transparent; color: var(--control-off); }
+.nlsend:not(:disabled):active { scale: .96; }
+.nlhint { height: 18px; margin: 4px 2px 0; font-size: 12px; line-height: 18px; color: var(--muted); visibility: hidden; }
+.nlbar:focus-within:has(input:not(:disabled)) .nlhint { visibility: visible; }
+.nlc.thinking p { margin: 0; color: var(--muted); font-weight: 400; }
+@media (prefers-reduced-motion: no-preference) { .nlfield.busy > svg.i { animation: rot 1.2s linear infinite; } }
+@media (prefers-reduced-motion: reduce) { .nlfield.busy > svg.i { display: none; } .nlfield.busy::before { content: "…"; color: var(--accent); font-weight: 700; width: 16px; text-align: center; } }
 .nlc { margin: 10px 14px 10px 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow), inset 3px 0 0 var(--accent); }
 .nlc p { margin: 0 0 8px; color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
 .nlc .acts, .nlc .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .nlc .chips { margin-bottom: 8px; }
 .nlc p + .acts { margin-top: 2px; }
-.nlnum { width: 64px; height: 28px; margin: 0 2px; padding: 0 6px; border: 0; border-radius: 6px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); text-align: right; }
+.nlnum { width: 64px; height: 28px; margin: 0 2px; padding: 0 6px; border: 0; border-radius: 6px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--control-off); text-align: right; }
 .nlchip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 9px; border: 0; border-radius: 999px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; font-weight: 500; }
 @media (hover: hover) { .nlchip:hover { background: var(--accent-soft); } }
 .row.target { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent), 0 1px 0 var(--line); }
@@ -352,6 +361,7 @@ details.sub > summary::-webkit-details-marker { display: none; }
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 1 6"/><path d="M20 3v5h-5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></symbol>
   <symbol id="i-sfx" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></symbol>
   <symbol id="i-dialogue" viewBox="0 0 24 24"><path d="M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3zM6 11a6 6 0 0 0 12 0M12 17v3"/></symbol>
@@ -399,9 +409,10 @@ details.sub > summary::-webkit-details-marker { display: none; }
       <div class="right"><span class="cap" id="busy"></span></div>
     </div>
     <form class="nlbar" id="nl-form">
-      <label class="nlfield"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg>
-        <input id="nl-input" type="text" maxlength="500" autocomplete="off" aria-label="말로 편집하기" disabled></label>
-      <button class="btn primary" id="nl-go" type="submit" disabled></button>
+      <div class="nlfield"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg>
+        <input id="nl-input" type="text" maxlength="500" autocomplete="off" aria-label="말로 편집하기" disabled>
+        <button class="nlsend" id="nl-go" type="submit" aria-label="보내기 (Enter)" title="보내기 (Enter)" disabled><svg class="i" aria-hidden="true" style="width:18px;height:18px;stroke-width:2"><use href="#i-send"/></svg></button></div>
+      <div class="nlhint">Enter로 보내기 · Esc로 닫기</div>
     </form>
     <div id="nl-card" role="status"></div>
     <div class="grid thead">
@@ -882,12 +893,11 @@ const st = (v) => `${v > 0 ? "+" : ""}${v}st`;
 const nlTrack = (id) => trackList().find((t) => t.id === id) || (id === "residual" && S.job ? { name: "나머지 소리", gain: S.job.residual.gain, pitch: null } : null);
 
 function nlSync() {
-  const ok = S.job?.state === "ready";
+  const ok = S.job?.state === "ready", first = trackList()[0]?.name;
   nlInput.disabled = !ok;
-  nlInput.placeholder = ok ? "무엇을 바꿀까요? 예: 칼 소리 반으로 줄여줘" : "영상을 올리고 분석이 끝나면 쓸 수 있습니다";
-  nlGo.disabled = !ok || NL.pending;
-  nlGo.setAttribute("aria-busy", String(NL.pending));
-  nlGo.replaceChildren(NL.pending ? el("span", { class: "spin" }) : icon("spark"), NL.pending ? "해석 중…" : "해석");
+  nlInput.placeholder = !ok ? "영상을 올리고 분석이 끝나면 쓸 수 있습니다" : `무엇을 바꿀까요? 예: "${first ?? "칼 소리"} 반으로 줄여줘"`;
+  nlGo.disabled = !ok || NL.pending || !nlInput.value.trim();
+  nlInput.closest(".nlfield").classList.toggle("busy", NL.pending);
 }
 function nlHighlight(id) {
   NL.hl = id || null;
@@ -918,11 +928,11 @@ const NUM = { set_gain: { min: 0, max: 200, step: 5 }, set_pitch: { min: -12, ma
 
 function nlDraw() {
   const box = $("nl-card"), c = NL.card;
-  if (!c) { box.replaceChildren(); return; }
+  if (!c) { box.replaceChildren(NL.pending ? el("div", { class: "nlc thinking" }, el("p", {}, "요청을 해석하는 중…")) : ""); return; }
   const d = c.decision, cancel = el("button", { class: "btn", type: "button", onclick: () => nlClose(true) }, "취소");
   let body;
   if (d.type === "none") {
-    body = [el("p", {}, "할 수 없는 요청입니다. 다른 표현으로 다시 입력해 주세요.")];
+    body = [el("p", {}, "편집 명령으로 바꿀 수 없는 요청입니다. 음량, 피치, 끄기·켜기, 다시 분리처럼 말해 주세요.")];
   } else if (d.type === "clarify") {
     const chips = d.reason !== "ambiguous_target" ? null : el("div", { class: "chips" }, nlTargets().map((t) =>
       el("button", { class: "nlchip", type: "button", onclick: () => nlRoute(`${NL.original} (대상: ${t.name}, ${t.id})`, NL.original) },
@@ -945,7 +955,7 @@ function nlTargets() {
 function nlEdit() {
   const d = NL.card.decision;
   if (NUM[d.type]) { NL.card.editing = true; nlDraw(); NL.input.focus(); NL.input.select(); return; }
-  nlInput.value = NL.original; nlClose(true);
+  nlInput.value = NL.original; nlSync(); nlClose(true);
 }
 async function nlRun() {
   const d = { ...NL.card.decision }, run = $("nl-run");
@@ -981,9 +991,9 @@ async function nlRoute(text, original) {
     } else out = await res.json();
   } catch (e) { err = e; }
   if (n !== NL.n || S.job?.id !== id) return;
-  NL.pending = false; nlSync();
+  NL.pending = false; nlSync(); nlDraw();
   if (err === "bad") return toast("라우터 응답 형식이 맞지 않습니다. 다시 시도하세요.");
-  if (err) return toast("요청을 해석하지 못했습니다.", err);
+  if (err) return toast("요청을 해석하지 못했습니다. 잠시 후 다시 보내 주세요.", err);
   const d = out.decision;
   NL.card = { decision: d, editing: false };
   nlHighlight(d.source_id);
@@ -991,9 +1001,10 @@ async function nlRoute(text, original) {
   if (d.type === "none") nlInput.focus();
   else if (d.type === "clarify") {
     if (d.reason === "ambiguous_target") $("nl-card").querySelector(".nlchip")?.focus();
-    else { nlInput.value = original; nlInput.focus(); nlInput.setSelectionRange(original.length, original.length); }
+    else { nlInput.value = original; nlSync(); nlInput.focus(); nlInput.setSelectionRange(original.length, original.length); }
   }
 }
+nlInput.addEventListener("input", nlSync);
 $("nl-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = nlInput.value.trim();
