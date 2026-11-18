@@ -100,8 +100,12 @@ def eval_routing(
         if split == "test":
             log = cases.parent / "test_opens.jsonl"
             opens = log.read_text().splitlines() if log.exists() else []
-            if len(opens) >= MAX_TEST_OPENS:
-                raise fail(f"the test split was already opened {MAX_TEST_OPENS} times")
+            used = sum(json.loads(line).get("model") == model for line in opens)
+            if used >= MAX_TEST_OPENS:
+                raise fail(
+                    f"model {model}: all {MAX_TEST_OPENS} opens of the test split "
+                    "are used"
+                )
     run_eval(
         load_router(settings),
         model,

@@ -141,11 +141,33 @@ class EvalRoutingCliTests(unittest.TestCase):
             entry = json.loads(log.read_text())
             self.assertEqual(entry["model"], "m")
             self.assertEqual(set(entry), {"date", "model", "git_sha", "out"})
-            log.write_text("{}\n" * 3)
+            log.write_text('{"model": "m"}\n' * 3)
             (Path(tmp) / "out").rename(Path(tmp) / "out-old")
             result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
             self.assertEqual(result.exit_code, 1, result.output)
             self.assertEqual(len(log.read_text().splitlines()), 3)
+
+    def test_test_split_cap_is_per_model(self):
+        import tempfile
+        from pathlib import Path
+        from audyssey.contracts import parse_decision
+        from audyssey.tools.routing import Routed
+        router = lambda r, j: Routed(parse_decision({"type": "none"}), None, 1.0, 1, 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.setup(tmp)
+            path = Path(tmp) / "cases.jsonl"
+            path.write_text(path.read_text().replace('"dev"', '"test"'))
+            log = Path(tmp) / "test_opens.jsonl"
+            log.write_text('{"model": "other"}\n' * 3)
+            result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(len(log.read_text().splitlines()), 4)
+            (Path(tmp) / "out").rename(Path(tmp) / "out-old")
+            log.write_text('{"model": "m"}\n' * 3)
+            result = self.invoke(tmp, "--router", "real", "--yes", "--split", "test", "--k", "1", router=router)
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertIn("m", result.output)
+            self.assertIn("3 opens", result.output)
 
     def test_crashed_test_run_is_not_counted(self):
         import tempfile
