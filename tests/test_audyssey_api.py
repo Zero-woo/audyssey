@@ -259,6 +259,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(render["video"], {"file": "out/video.mp4"})
         self.assertEqual(self.client.get("/api/jobs/0123456789ab/trace").status_code, 404)
 
+    def test_router_reports_the_configured_mode(self):
+        self.assertEqual(self.client.get("/api/router").json(), {"router": "stub"})
+
     def test_system_lists_servers_in_pipeline_order(self):
         lanes = self.client.get("/api/system").json()
         self.assertEqual([lane["id"] for lane in lanes], ["app"])

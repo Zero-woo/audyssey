@@ -174,6 +174,11 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(404, "file not found") from exc
 
+    @app.get("/api/router")
+    def router_mode() -> dict:
+        """Which router answers /route; the UI turns the NL bar off for stub."""
+        return {"router": settings.router}
+
     @app.get("/api/system")
     def system() -> list[dict]:
         """Servers in pipeline order, with what runs on each and whether it is up."""

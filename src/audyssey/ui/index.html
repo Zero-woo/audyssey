@@ -886,16 +886,18 @@ $("export").addEventListener("click", async () => {
 
 /* ---------- natural-language edit bar ---------- */
 // The router only proposes; nothing changes until the user runs the card.
-const NL = { n: 0, pending: false, original: "", card: null, hl: null };
+const NL = { n: 0, pending: false, original: "", card: null, hl: null, router: null };
 const nlInput = $("nl-input"), nlGo = $("nl-go");
 const pct = (g) => `${Math.round(g * 100)}%`;
 const st = (v) => `${v > 0 ? "+" : ""}${v}st`;
 const nlTrack = (id) => trackList().find((t) => t.id === id) || (id === "residual" && S.job ? { name: "나머지 소리", gain: S.job.residual.gain, pitch: null } : null);
 
 function nlSync() {
-  const ok = S.job?.state === "ready", first = trackList()[0]?.name;
+  // The keyword stub is too weak to offer here; say why instead of hiding the bar.
+  const stub = NL.router === "stub", ok = !stub && S.job?.state === "ready", first = trackList()[0]?.name;
   nlInput.disabled = !ok;
-  nlInput.placeholder = !ok ? "영상을 올리고 분석이 끝나면 쓸 수 있습니다" : `무엇을 바꿀까요? 예: "${first ?? "칼 소리"} 반으로 줄여줘"`;
+  nlInput.placeholder = stub ? "말로 편집하기는 LLM 라우터를 켜야 쓸 수 있습니다 (서버 설정 AUDYSSEY_ROUTER)"
+    : !ok ? "영상을 올리고 분석이 끝나면 쓸 수 있습니다" : `무엇을 바꿀까요? 예: "${first ?? "칼 소리"} 반으로 줄여줘"`;
   nlGo.disabled = !ok || NL.pending || !nlInput.value.trim();
   nlInput.closest(".nlfield").classList.toggle("busy", NL.pending);
 }
@@ -1498,6 +1500,7 @@ async function loadSystem() { try { S.lanes = await api("/api/system"); drawBoar
 
 (async () => {
   drawAll();
+  try { NL.router = (await api("/api/router")).router; nlSync(); } catch {}
   await loadSystem();
   try {
     const jobs = await loadJobs();
