@@ -305,6 +305,9 @@ cython_debug/
 .agents/
 *.json
 !/langgraph.json
+!/src/audyssey/tools/routing/descriptions.json
+!/evals/routing/fixtures/*.json
+!/evals/routing/runs/*/config.json
 .langgraph_api/
 
 # Local benchmark media and outputs
@@ -322,3 +325,4 @@ data/
 
 # Audyssey local job media and generated tracks
 /work/jobs/
+/evals/routing/cache/

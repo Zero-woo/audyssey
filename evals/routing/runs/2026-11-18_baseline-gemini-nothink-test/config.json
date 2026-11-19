@@ -1,0 +1,11 @@
+{
+  "model": "gemini-3.8-flash",
+  "router": "real",
+  "descriptions_version": 2,
+  "descriptions_sha256": "d8833b86699fa1888c58332cf0f75ea102774164b1536d9f3a4d18ccc6bdcc7c",
+  "git_sha": "add1ae57e2e4ee31e6aeb96f480a1341cc85d213",
+  "k": 5,
+  "split": "test",
+  "date": "2026-11-18T13:31:51.491603+00:00",
+  "cases": 70
+}

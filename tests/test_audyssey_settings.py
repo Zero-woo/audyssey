@@ -21,6 +21,44 @@ class SettingsTests(unittest.TestCase):
             (2, 2, 30),
         )
 
+    def test_router_defaults_to_stub_and_reads_env(self):
+        self.assertEqual(Settings().router, "stub")
+        with patch.dict(os.environ, AUDYSSEY_ROUTER="real"):
+            self.assertEqual(Settings().router, "real")
+
+    def test_hybrid_router_settings(self):
+        with self.assertRaisesRegex(ValidationError, "AUDYSSEY_ROUTER_DECISION_URL"):
+            Settings(router="hybrid")
+        Settings(router="hybrid", router_decision_url="http://d")
+        settings = Settings()
+        self.assertEqual(
+            (settings.router_decision_url, settings.router_hybrid_escape,
+             settings.router_decision_model),
+            ("", False, "h2o-lightning-4b"),
+        )
+        env = {"AUDYSSEY_ROUTER": "hybrid", "AUDYSSEY_ROUTER_DECISION_URL": "http://d",
+               "AUDYSSEY_ROUTER_HYBRID_ESCAPE": "true", "AUDYSSEY_ROUTER_DECISION_MODEL": "x"}
+        with patch.dict(os.environ, env):
+            settings = Settings()
+        self.assertEqual(
+            (settings.router, settings.router_hybrid_escape, settings.router_decision_model),
+            ("hybrid", True, "x"),
+        )
+
+    def test_router_guard_defaults_off_and_reads_env(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(Settings().router_guard)
+        with patch.dict(os.environ, {"AUDYSSEY_ROUTER_GUARD": "true"}, clear=True):
+            self.assertTrue(Settings().router_guard)
+
+    def test_router_reasoning_effort(self):
+        self.assertIsNone(Settings().router_reasoning_effort)
+        with patch.dict(os.environ, AUDYSSEY_ROUTER_REASONING_EFFORT="none"):
+            self.assertEqual(Settings().router_reasoning_effort, "none")
+        with patch.dict(os.environ, AUDYSSEY_ROUTER_REASONING_EFFORT="max"):
+            with self.assertRaises(ValidationError):
+                Settings()
+
     def test_env_override(self):
         with patch.dict(
             os.environ, AUDYSSEY_PLANNER="real", AUDYSSEY_MAX_PLAN_ROUNDS="3"
@@ -106,6 +144,26 @@ class SettingsTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(validator_api="gemini")
         Settings(validator_api="gemini", validator_input="video")
+
+    def test_router_endpoint_falls_back_to_planner(self):
+        planner = dict(planner_base_url="http://planner/v1", planner_model="p", planner_api_key="k")
+        settings = Settings(**planner)
+        self.assertEqual(settings.router_endpoint(), settings.planner_endpoint())
+        settings = Settings(router_model="r", router_api="openrouter", **planner)
+        router = settings.router_endpoint()
+        self.assertEqual((router.model, router.api), ("r", "openrouter"))
+        self.assertEqual((router.base_url, router.api_key), ("http://planner/v1", "k"))
+        self.assertEqual(settings.planner_endpoint().model, "p")
+        settings = Settings(router_base_url="http://router/v1", router_api_key="router-secret-key", **planner)
+        router = settings.router_endpoint()
+        self.assertEqual((router.base_url, router.api_key, router.model), ("http://router/v1", "router-secret-key", "p"))
+        self.assertNotIn("router-secret-key", repr(settings))
+
+    def test_real_router_rejects_gemini(self):
+        with self.assertRaisesRegex(ValidationError, "AUDYSSEY_ROUTER_API must be openai or openrouter"):
+            Settings(router="real", router_api="gemini", planner_input="video")
+        Settings(router="stub", router_api="gemini", planner_input="video")
+        Settings(router="real", router_api="openrouter")
 
     def test_planner_input_settings(self):
         settings = Settings()

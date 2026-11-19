@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUDYSSEY_")
 
     planner: Literal["stub", "real"] = "stub"
+    router: Literal["stub", "real", "hybrid"] = "stub"
     separator: Literal["stub", "real", "remote"] = "stub"
     filter: Literal["stub", "real", "remote"] = "stub"
     grounder: Literal["stub", "real", "remote"] = "stub"
@@ -79,6 +80,22 @@ class Settings(BaseSettings):
     validator_input: Input | None = None
     validator_fps: float | None = Field(default=None, gt=0, le=30)
     validator_video_audio: bool | None = None
+    # Router model; each unset value falls back to the planner's.
+    router_api: Api | None = None
+    router_base_url: str | None = None
+    router_model: str | None = None
+    router_api_key: str | None = Field(default=None, repr=False)
+    # Unlike the fields above there is no planner fallback: None sends nothing.
+    router_reasoning_effort: Literal["none", "low", "medium", "high"] | None = None
+    # tools: one function call per decision type; json_schema: structured output.
+    router_format: Literal["tools", "json_schema"] = "tools"
+    # Replace router commands the job cannot run with a clarify answer.
+    router_guard: bool = False
+    # hybrid: a decision server picks the command and source; the router model fills values.
+    router_decision_url: str = ""
+    router_decision_model: str = "h2o-lightning-4b"  # names the run; never sent
+    # Offer a clarify(missing_value) tool to the value filler.
+    router_hybrid_escape: bool = False
     max_plan_rounds: int = Field(default=2, ge=1)
     max_separation_retries: int = Field(default=2, ge=0)
     max_duration_s: float = Field(default=30, gt=0)
@@ -123,6 +140,29 @@ class Settings(BaseSettings):
         return planner.model_copy(
             update={k: v for k, v in overrides.items() if v is not None}
         )
+
+    def router_endpoint(self) -> LLMEndpoint:
+        overrides = {
+            "api": self.router_api,
+            "base_url": self.router_base_url,
+            "model": self.router_model,
+            "api_key": self.router_api_key,
+        }
+        return self.planner_endpoint().model_copy(
+            update={k: v for k, v in overrides.items() if v is not None}
+        )
+
+    @model_validator(mode="after")
+    def _router_api_is_chat_completions(self) -> Self:
+        if self.router != "stub" and self.router_endpoint().api == "gemini":
+            raise ValueError("AUDYSSEY_ROUTER_API must be openai or openrouter")
+        return self
+
+    @model_validator(mode="after")
+    def _hybrid_needs_decision_url(self) -> Self:
+        if self.router == "hybrid" and not self.router_decision_url:
+            raise ValueError("AUDYSSEY_ROUTER_DECISION_URL is required for hybrid")
+        return self
 
     @model_validator(mode="after")
     def _gemini_takes_video(self) -> Self:

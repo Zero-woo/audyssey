@@ -1,0 +1,55 @@
+{
+  "id": "F1",
+  "video_path": "F1.mp4",
+  "silent": false,
+  "duration": 12,
+  "audio_path": "F1/audio.wav",
+  "mono_path": "F1/mono.wav",
+  "sources": [
+    {
+      "id": "s1",
+      "plan": {
+        "name": "dog barking",
+        "kind": "sfx",
+        "description": "dog barking"
+      },
+      "status": "done",
+      "track_path": "x/s1.wav"
+    },
+    {
+      "id": "s2",
+      "plan": {
+        "name": "car passing",
+        "kind": "sfx",
+        "description": "car passing"
+      },
+      "status": "done",
+      "track_path": "x/s2.wav"
+    },
+    {
+      "id": "s3",
+      "plan": {
+        "name": "man speaking",
+        "kind": "dialogue",
+        "description": "man speaking"
+      },
+      "status": "done",
+      "track_path": "x/s3.wav"
+    },
+    {
+      "id": "s4",
+      "plan": {
+        "name": "street ambience",
+        "kind": "ambience",
+        "description": "street ambience"
+      },
+      "status": "done",
+      "track_path": "x/s4.wav"
+    }
+  ],
+  "residual": {
+    "path": "F1/residual.wav"
+  },
+  "state": "ready",
+  "method": "separate"
+}

@@ -14,6 +14,9 @@ video {max-width: 100%} a {display: inline-block; margin: .5rem} #error {white-s
 <h1>Audyssey dev UI</h1>
 <p>개발용 화면 — 최종 UI 아님</p>
 <form id="upload"><label>영상 (최대 30초) <input name="file" type="file" accept="video/*" required></label><button>업로드</button></form>
+<form id="route"><fieldset><legend>자연어 편집</legend>
+<label>요청 <input name="request" maxlength="500" size="50" required></label><button disabled>해석</button></fieldset></form>
+<div id="route-card" role="status"></div>
 <p id="error" role="alert"></p>
 <p id="status" role="status"></p>
 <section aria-label="단계 상태"><h2>진행 상태</h2><ol id="steps"></ol></section>
@@ -53,6 +56,71 @@ async function command(data) {
   $('error').textContent = '';
   try {
     show(await request(`/api/jobs/${job.id}/commands`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}));
+  } catch (error) { fail(error); }
+}
+function sourceName(id) {
+  if (id === 'residual') return '나머지 소리';
+  const source = job.sources.find(item => item.id === id);
+  return source ? `${source.plan.name} (${id})` : id;
+}
+function sourceOf(id) { return id === 'residual' ? job.residual : job.sources.find(item => item.id === id); }
+const num = value => Number.isInteger(value * 10) ? value.toFixed(1) : value.toFixed(2);
+const signed = value => (value >= 0 ? '+' : '') + value;
+function describe(d) {
+  const name = d.source_id && sourceName(d.source_id), source = d.source_id && sourceOf(d.source_id);
+  switch (d.type) {
+    case 'set_gain': return `${name} 음량 ${source ? num(source.gain) : '?'} → ${num(d.gain)}`;
+    case 'set_pitch': return `${name} 음높이 ${source ? signed(source.pitch_semitones) : '?'} → ${signed(d.semitones)}`;
+    case 'drop': return `${name} 끄기`;
+    case 'keep': return `${name} 켜기`;
+    case 'reseparate': return `${name} 다시 분리`;
+    case 'generate': return `${name} 생성으로 바꾸기`;
+    case 'add_source': return `새 소스 추가: ${d.plan.name} (${d.method})`;
+    case 'render': return '결과 합치기';
+  }
+  return d.type;
+}
+const clearCard = () => $('route-card').replaceChildren();
+function button(text, onclick) {
+  const node = element('button', text); node.type = 'button'; node.onclick = onclick; return node;
+}
+let originalRequest = '';
+function showCard(decision) {
+  const card = $('route-card');
+  if (decision.type === 'none') {
+    card.replaceChildren(element('p', '할 수 없는 요청입니다. 다른 표현으로 다시 입력해 주세요.'));
+    $('route').elements.request.focus(); return;
+  }
+  if (decision.type === 'clarify') {
+    const nodes = [element('p', decision.question)];
+    if (decision.reason === 'ambiguous_target') {
+      const targets = [...job.sources.map(source => [source.plan.name, source.id]), ['나머지 소리', 'residual']];
+      for (const [name, id] of targets) nodes.push(button(`${name} (${id})`, () => route(`${originalRequest} (대상: ${name}, ${id})`)));
+    }
+    card.replaceChildren(...nodes); return;
+  }
+  const run = button('실행', () => { clearCard(); command(decision); });
+  const editor = element('textarea'); editor.rows = 8; editor.cols = 60; editor.setAttribute('aria-label', '명령 JSON');
+  const runEdited = button('수정한 명령 실행', () => {
+    let edited;
+    try { edited = JSON.parse(editor.value); } catch (error) { fail(error); return; }
+    clearCard(); command(edited);
+  });
+  const edit = button('수정', () => {
+    editor.value = JSON.stringify(decision, null, 2);
+    card.replaceChildren(editor, runEdited, button('취소', clearCard)); editor.focus();
+  });
+  card.replaceChildren(element('p', describe(decision)), run, edit, button('취소', clearCard));
+}
+async function route(requestText) {
+  if (!job) return;
+  $('error').textContent = ''; clearCard();
+  try {
+    const response = await fetch(`/api/jobs/${job.id}/route`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({request:requestText})});
+    if (response.status === 502) { fail(new Error('라우터 응답 형식이 맞지 않습니다. 다시 시도하세요.')); return; }
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+    showCard(data.decision);
   } catch (error) { fail(error); }
 }
 function slider(source, title, key, min, max, step, type, field) {
@@ -113,6 +181,7 @@ function show(data) {
     node.className = step.status; return node;
   }));
   $('tracks').replaceChildren(...job.sources.map(source => track(source)), track({...job.residual, id:'residual'}, true));
+  $('route').querySelector('button').disabled = false;
   $('render').disabled = job.state !== 'ready';
   $('add').querySelector('button').disabled = job.state !== 'ready';
   $('outputs').replaceChildren();
@@ -128,7 +197,7 @@ $('upload').onsubmit = async event => {
   try {
     const data = await request('/api/jobs', {method:'POST', body:new FormData(event.target)});
     if (events) events.close();
-    job = undefined; show(data);
+    job = undefined; originalRequest = ''; clearCard(); show(data);
     events = new EventSource(`/api/jobs/${job.id}/events`);
     // The dev UI keeps the old one-step flow: start as soon as preprocessing ends.
     let started = false;
@@ -147,6 +216,11 @@ $('add').onsubmit = event => {
   if (!job) return;
   const data = new FormData(event.target);
   command({type:'add_source', method:data.get('method'), plan:{name:data.get('name'), kind:data.get('kind'), description:data.get('description'), spans:[{start:Number(data.get('start')), end:Number(data.get('end'))}]}});
+};
+$('route').onsubmit = event => {
+  event.preventDefault();
+  originalRequest = event.target.elements.request.value;
+  route(originalRequest);
 };
 $('render').onclick = () => command({type:'render', include_residual_stem:$('residual-stem').checked});
 $('add').querySelector('button').disabled = true;

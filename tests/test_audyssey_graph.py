@@ -543,6 +543,51 @@ class GraphTests(unittest.TestCase):
                 graph.handle_command(job, command, self.ctx)
             self.assertEqual(job.model_dump_json(), snapshot)
 
+    def test_check_command_rejects_without_mutation(self):
+        from audyssey.contracts import Generate
+        job = graph.analyze(self.job, self.ctx)
+        separated = next(s for s in job.sources if s.plan.kind != "dialogue")
+        dialogue = next(s for s in job.sources if s.plan.kind == "dialogue")
+        cases = [
+            (KeyError, SetGain(source_id="s99", gain=1)),
+            (ValueError, Generate(source_id=dialogue.id)),
+            (ValueError, SetPitch(source_id="residual", semitones=1)),
+            (ValueError, Generate(source_id=separated.id, description=" ")),
+            (ValueError, Reseparate(source_id=separated.id, spans=[Span(start=0, end=job.duration + 5)])),
+            (ValueError, AddSource(plan=separated.plan)),
+        ]
+        for error, command in cases:
+            snapshot = job.model_dump_json()
+            with self.subTest(command=command), self.assertRaises(error):
+                graph.check_command(job, command)
+            self.assertEqual(job.model_dump_json(), snapshot)
+        job.silent = True
+        for command in [Reseparate(source_id=separated.id),
+                        AddSource(method="separate", plan=SourcePlan(name="new", kind="sfx", description="sound"))]:
+            snapshot = job.model_dump_json()
+            with self.subTest(command=command), self.assertRaises(ValueError):
+                graph.check_command(job, command)
+            self.assertEqual(job.model_dump_json(), snapshot)
+
+    def test_check_command_accepts_without_running_tools(self):
+        from unittest.mock import Mock
+        from audyssey.contracts import Generate
+        job = graph.analyze(self.job, self.ctx)
+        separate = Mock(side_effect=AssertionError("check must not separate"))
+        generate = Mock(side_effect=AssertionError("check must not generate"))
+        self.ctx.tools = replace(self.ctx.tools, separate=separate, generate=generate)
+        separated = next(s for s in job.sources if s.plan.kind != "dialogue")
+        commands = [Generate(source_id=separated.id), Reseparate(source_id=separated.id),
+                    AddSource(method="generate", plan=SourcePlan(name="extra", kind="sfx", description="rain")),
+                    SetGain(source_id=separated.id, gain=0.5), Keep(source_id=separated.id)]
+        for command in commands:
+            snapshot = job.model_dump_json()
+            with self.subTest(command=command):
+                self.assertIsNone(graph.check_command(job, command))
+            self.assertEqual(job.model_dump_json(), snapshot)
+        separate.assert_not_called()
+        generate.assert_not_called()
+
     def test_add_source_generate(self):
         from unittest.mock import Mock
         job = graph.analyze(self.job, self.ctx)

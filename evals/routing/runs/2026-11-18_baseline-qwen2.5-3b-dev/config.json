@@ -1,0 +1,11 @@
+{
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "router": "real",
+  "descriptions_version": 2,
+  "descriptions_sha256": "d8833b86699fa1888c58332cf0f75ea102774164b1536d9f3a4d18ccc6bdcc7c",
+  "git_sha": "0f93a630f65fbe1ed1fcfa39cffee57a5505aef0",
+  "k": 5,
+  "split": "dev",
+  "date": "2026-11-18T12:53:01.695150+00:00",
+  "cases": 73
+}
