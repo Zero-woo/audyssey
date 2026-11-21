@@ -614,6 +614,13 @@ class HybridTests(unittest.TestCase):
             hybrid._questions(make_job(), d)["decision"]["criteria"]["drop"],
         )
 
+    def test_route_sends_descriptions_override_to_decision_server(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.route(descriptions=d)
+        criteria = self.decision_requests[0]["questions"]["decision"]["criteria"]
+        self.assertIn("OVERRIDE-WHEN-SENTENCE", criteria["drop"])
+
     def test_stage_one_only_commands_skip_the_llm(self):
         cases = [
             ("none", "s1", 0.3, NoCommand()),

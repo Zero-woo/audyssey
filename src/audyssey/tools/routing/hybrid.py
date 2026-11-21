@@ -98,11 +98,11 @@ def override(
     return None
 
 
-def _ask(url, request, job, transport) -> tuple[dict, dict, int]:
+def _ask(url, request, job, transport, descriptions=None) -> tuple[dict, dict, int]:
     body = {
         "model": "x",
         "state": {"job": summarize(job), "request": request},
-        "questions": _questions(job),
+        "questions": _questions(job, descriptions),
     }
     with httpx2.Client(transport=transport, timeout=60) as client:
         response = client.post(f"{url.rstrip('/')}/v1/systemone", json=body)
@@ -179,7 +179,9 @@ def route(
 ) -> Routed:
     start = time.perf_counter()
     try:
-        answer, raw, tokens = _ask(decision_url, request, job, decision_transport)
+        answer, raw, tokens = _ask(
+            decision_url, request, job, decision_transport, descriptions
+        )
     except (ValueError, KeyError, TypeError, AttributeError):
         # A malformed answer is the model's; transport errors propagate so the
         # eval does not cache them. No request text in the error.
