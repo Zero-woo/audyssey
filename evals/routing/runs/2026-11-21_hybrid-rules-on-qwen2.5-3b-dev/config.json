@@ -1,0 +1,14 @@
+{
+  "model": "hybrid[h2o-lightning-4b+Qwen/Qwen2.5-3B-Instruct]",
+  "router": "hybrid",
+  "format": "tools",
+  "guard": false,
+  "reasoning_effort": null,
+  "descriptions_version": 3,
+  "descriptions_sha256": "52fb641a5be040f3d15092c2d7acdc278737ece8e692e46e1349ce3d578ac0db",
+  "git_sha": "fb1cba0f097cdf3c34ab255481713b7083395be3",
+  "k": 5,
+  "split": "dev",
+  "date": "2026-11-21T08:11:25.680477+00:00",
+  "cases": 73
+}
