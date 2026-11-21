@@ -14,8 +14,10 @@ from audyssey.routing_eval import (
     adopt,
     assign_splits,
     blank_labels,
+    DESCRIPTIONS,
     bootstrap_ci,
     correct,
+    descriptions_sha,
     kappa,
     load_cases,
     load_fixture,
@@ -545,10 +547,6 @@ class RunEvalTests(unittest.TestCase):
             self.assertFalse((tmp / "cache").exists())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class AdoptTests(unittest.TestCase):
     def m(self, f1=0.8, ns=0.9, recall=None) -> dict:
         per = {k: {"recall": v} for k, v in (recall or {}).items()}
@@ -571,3 +569,15 @@ class AdoptTests(unittest.TestCase):
         old = self.m(0.8, recall={"keep": None, "drop": 0.9})
         new = self.m(0.9, recall={"keep": 0.1, "drop": None})
         self.assertEqual(adopt(new, old), [])
+
+
+class DescriptionsShaTests(unittest.TestCase):
+    def test_equal_dict_same_sha_as_none(self) -> None:
+        data = json.loads(DESCRIPTIONS.read_bytes())
+        self.assertEqual(descriptions_sha(data), descriptions_sha(None))
+        data["version"] += 1
+        self.assertNotEqual(descriptions_sha(data), descriptions_sha(None))
+
+
+if __name__ == "__main__":
+    unittest.main()

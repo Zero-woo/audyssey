@@ -36,6 +36,8 @@ QUESTIONS = {
     "other": "무엇을 바꿀지 다시 말씀해 주시겠어요?",
 }
 COMPOSITE_MIN: float | None = None
+# A sweep run sets this True to collect the composite answer with the rule off.
+ASK_COMPOSITE: bool = False
 TARGET_MARGIN: float | None = None
 TARGETED_KINDS = {"keep", "drop", "set_gain", "set_pitch", "reseparate", "generate"}
 VALUE = {"set_gain", "set_pitch", "add_source"}
@@ -46,7 +48,9 @@ VALUE_PROMPT = """당신은 영상 오디오 편집 요청에서 명령의 값�
 ESCAPE_PROMPT = "\n요청에 양이 없거나 모호하면 clarify를 호출합니다."
 
 
-def _questions(job: Job, descriptions: dict | None = None) -> dict:
+def _questions(
+    job: Job, descriptions: dict | None = None, composite_min: float | None = None
+) -> dict:
     commands = _commands(descriptions)
     options = {
         name: f"{d['when']} {d['instead']}"
@@ -59,7 +63,7 @@ def _questions(job: Job, descriptions: dict | None = None) -> dict:
         s.id: f"{s.plan.name} ({s.plan.kind}, {'켜짐' if s.keep else '꺼짐'})"
         for s in job.sources
     } | {"residual": "residual: 분리되지 않고 남은 나머지 소리"}
-    return {
+    questions = {
         "decision": {
             "type": "choice",
             "instructions": "사용자 요청(request)을 처리할 편집 명령 하나를 고르세요.",
@@ -74,11 +78,13 @@ def _questions(job: Job, descriptions: dict | None = None) -> dict:
             "type": "noul",
             "instructions": "요청이 residual stem(잔여 소리)도 따로 내보내라고 하나요?",
         },
-        "composite": {
+    }
+    if ASK_COMPOSITE or composite_min is not None:
+        questions["composite"] = {
             "type": "noul",
             "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
-        },
-    }
+        }
+    return questions
 
 
 def override(
@@ -98,11 +104,13 @@ def override(
     return None
 
 
-def _ask(url, request, job, transport, descriptions=None) -> tuple[dict, dict, int]:
+def _ask(
+    url, request, job, transport, descriptions=None, composite_min=None
+) -> tuple[dict, dict, int]:
     body = {
         "model": "x",
         "state": {"job": summarize(job), "request": request},
-        "questions": _questions(job, descriptions),
+        "questions": _questions(job, descriptions, composite_min),
     }
     with httpx2.Client(transport=transport, timeout=60) as client:
         response = client.post(f"{url.rstrip('/')}/v1/systemone", json=body)
@@ -180,7 +188,7 @@ def route(
     start = time.perf_counter()
     try:
         answer, raw, tokens = _ask(
-            decision_url, request, job, decision_transport, descriptions
+            decision_url, request, job, decision_transport, descriptions, composite_min
         )
     except (ValueError, KeyError, TypeError, AttributeError):
         # A malformed answer is the model's; transport errors propagate so the

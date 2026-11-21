@@ -664,16 +664,19 @@ class HybridTests(unittest.TestCase):
             },
         )
         self.assertEqual(questions["residual_stem"]["type"], "noul")
-        self.assertEqual(
-            set(questions), {"decision", "target", "residual_stem", "composite"}
-        )
-        self.assertEqual(
-            questions["composite"],
-            {
-                "type": "noul",
-                "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
-            },
-        )
+        self.assertEqual(set(questions), {"decision", "target", "residual_stem"})
+
+    def test_composite_question_only_when_rule_on(self):
+        self.choice = "none"
+        wire = {
+            "type": "noul",
+            "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
+        }
+        self.route(composite_min=0.5)
+        self.assertEqual(self.decision_requests[-1]["questions"]["composite"], wire)
+        with patch.object(hybrid, "ASK_COMPOSITE", True):
+            self.route()
+        self.assertEqual(self.decision_requests[-1]["questions"]["composite"], wire)
 
     def test_set_gain_fills_value_with_one_tool(self):
         routed = self.route()

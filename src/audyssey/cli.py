@@ -213,6 +213,8 @@ def improve_routing(
         cases.parent / "cache",
         out,
         rounds,
+        fmt=fmt,
+        effort=effort,
     )
     typer.echo(f"wrote {out}")
 

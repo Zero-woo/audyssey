@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import httpx2
+from langsmith import tracing_context
 
 from audyssey.contracts import Job
 from audyssey.routing_eval import (
@@ -140,6 +141,8 @@ def improve(
     out: Path,
     rounds: int = 5,
     transport: httpx2.BaseTransport | None = None,
+    fmt: str = "tools",
+    effort: str | None = None,
 ) -> dict:
     """Rewrite descriptions from train failures; adopt a candidate only on dev."""
     out.mkdir(parents=True)
@@ -156,6 +159,8 @@ def improve(
             1,
             where,
             cache,
+            fmt=fmt,
+            effort=effort,
             descriptions=d,
         )
 
@@ -176,6 +181,8 @@ def improve(
             1,
             train_metrics_dir,
             cache,
+            fmt=fmt,
+            effort=effort,
             descriptions=base,
         )
         failures = [
@@ -201,22 +208,24 @@ def improve(
         user = json.dumps(
             {"descriptions": base["commands"], "failures": sent}, ensure_ascii=False
         )
-        reply = client.chat.completions.create(
-            model=improver.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user},
-            ],
-            temperature=1.0,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "descriptions",
-                    "strict": True,
-                    "schema": _schema(list(base["commands"])),
+        # Failed requests are the user's; they never go to LangSmith.
+        with tracing_context(enabled=False):
+            reply = client.chat.completions.create(
+                model=improver.model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user},
+                ],
+                temperature=1.0,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "descriptions",
+                        "strict": True,
+                        "schema": _schema(list(base["commands"])),
+                    },
                 },
-            },
-        )
+            )
         text = reply.choices[0].message.content or ""
         entry: dict = {"round": n}
         log.append(entry)

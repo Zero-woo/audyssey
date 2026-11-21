@@ -33,7 +33,7 @@ def load_runs(run_dir: Path, cases: dict[str, Case]) -> list[Run]:
                 input_tokens=r["input_tokens"],
                 output_tokens=r["output_tokens"],
                 guarded=r["guarded"],
-                raw=r["raw"],
+                raw=r.get("raw"),
             )
         )
     return runs

@@ -146,6 +146,16 @@ class ImproveTests(unittest.TestCase):
     def sent(self, i):
         return json.loads(self.bodies[i]["messages"][1]["content"])
 
+    def test_format_and_effort_reach_run_eval(self):
+        improve(
+            route_with, "m", ENDPOINT, cases("tr", "train"), cases("dv", "dev"),
+            FIXTURES, self.root / "cache", self.root / "out", 0,
+            transport=self.transport(), fmt="json_schema", effort="none",
+        )
+        cfg = json.loads((self.root / "out/round-0/dev/config.json").read_text())
+        self.assertEqual(cfg["format"], "json_schema")
+        self.assertEqual(cfg["reasoning_effort"], "none")
+
     def test_dev_requests_never_reach_improver(self):
         self.replies = [good_candidate(), good_candidate()]
         self.run_improve()

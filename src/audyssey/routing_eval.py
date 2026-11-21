@@ -337,6 +337,8 @@ def _descriptions() -> tuple[str, int]:
 def descriptions_sha(descriptions: dict | None) -> str:
     if descriptions is None:
         return _descriptions()[0]
+    if descriptions == json.loads(DESCRIPTIONS.read_bytes()):
+        return _descriptions()[0]
     text = json.dumps(descriptions, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(text.encode()).hexdigest()
 
