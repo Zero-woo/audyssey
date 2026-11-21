@@ -22,10 +22,17 @@ FIELDS = {"when", "instead", "params", "examples"}
 MAX_LEN = 400
 
 
-def overlaps(text: str, requests: list[str], n: int = 6) -> bool:
-    """True if `text` shares any length-n substring (spaces count) with a request."""
-    grams = {r[i : i + n] for r in requests for i in range(len(r) - n + 1)}
-    return any(g in text for g in grams)
+def grams(text: str, n: int = 6) -> set[str]:
+    return {text[i : i + n] for i in range(len(text) - n + 1)}
+
+
+def overlaps(
+    text: str, requests: list[str], n: int = 6, allowed: set[str] | None = None
+) -> bool:
+    """True if `text` shares a length-n substring (spaces count) with a request,
+    ignoring substrings in `allowed`."""
+    failed = {g for r in requests for g in grams(r, n)}
+    return bool(grams(text, n) & failed - (allowed or set()))
 
 
 def validate(candidate: dict, current: dict, failed_requests: list[str]) -> list[str]:
@@ -35,6 +42,13 @@ def validate(candidate: dict, current: dict, failed_requests: list[str]) -> list
     """
     problems = []
     got, want = candidate.get("commands"), current["commands"]
+    # 6-grams already in the current descriptions are shared vocabulary, not copying
+    allowed = {
+        g
+        for d in want.values()
+        for text in [d["when"], d["instead"], d["params"], *d["examples"]]
+        for g in grams(text)
+    }
     if not isinstance(got, dict) or set(got) != set(want):
         return ["commands must be exactly " + ", ".join(want)]
     for name, d in got.items():
@@ -61,7 +75,7 @@ def validate(candidate: dict, current: dict, failed_requests: list[str]) -> list
             problems.append(f"{name}: instead contains a prohibition")
         for f in FIELDS:
             for text in ex if f == "examples" else [d[f]]:
-                if overlaps(text, failed_requests):
+                if overlaps(text, failed_requests, allowed=allowed):
                     problems.append(f"{name}.{f}: copies a failed request")
     return problems
 

@@ -32,6 +32,19 @@ class ValidateTests(unittest.TestCase):
     def test_shipped_file_is_valid(self):
         self.assertEqual(validate(CURRENT, CURRENT, FAILED), [])
 
+    def test_shared_vocabulary_is_not_copying(self):
+        failed = ["residual 트랙 꺼줘", '차 소리 "음소거해줘"']
+        self.assertEqual(validate(CURRENT, CURRENT, failed), [])
+
+    def test_new_phrase_from_failed_request_rejected(self):
+        self.assertNotIn("짖는 소리 반", json.dumps(CURRENT, ensure_ascii=False))
+        problems = validate(candidate(drop={"when": "짖는 소리 반"}), CURRENT, FAILED)
+        self.assertEqual(problems, ["drop.when: copies a failed request"])
+
+    def test_reused_run_from_current_accepted(self):
+        c = candidate(drop={"when": "residual"})
+        self.assertEqual(validate(c, CURRENT, ["residual 트랙 꺼줘"]), [])
+
     def test_missing_command(self):
         c = copy.deepcopy(CURRENT)
         del c["commands"]["keep"]
