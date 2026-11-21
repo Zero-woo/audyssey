@@ -1,2 +1,3 @@
 {"date": "2026-11-18T12:53:54.404058+00:00", "model": "Qwen/Qwen2.5-3B-Instruct", "git_sha": "0f93a630f65fbe1ed1fcfa39cffee57a5505aef0", "out": "evals/routing/runs/2026-11-18_baseline-qwen2.5-3b-test"}
 {"date": "2026-11-18T13:31:53.679916+00:00", "model": "gemini-3.8-flash", "git_sha": "add1ae57e2e4ee31e6aeb96f480a1341cc85d213", "out": "evals/routing/runs/2026-11-18_baseline-gemini-nothink-test"}
+{"date": "2026-11-21T09:11:52.723640+00:00", "model": "hybrid[h2o-lightning-4b+Qwen/Qwen2.5-3B-Instruct]", "git_sha": "582b90382c1928791ae472bbbca2292f5ef30e09", "out": "evals/routing/runs/2026-11-21_hybrid-guard-qwen2.5-3b-test"}
