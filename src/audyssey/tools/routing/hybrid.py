@@ -46,8 +46,8 @@ VALUE_PROMPT = """당신은 영상 오디오 편집 요청에서 명령의 값�
 ESCAPE_PROMPT = "\n요청에 양이 없거나 모호하면 clarify를 호출합니다."
 
 
-def _questions(job: Job) -> dict:
-    commands = _commands()
+def _questions(job: Job, descriptions: dict | None = None) -> dict:
+    commands = _commands(descriptions)
     options = {
         name: f"{d['when']} {d['instead']}"
         for name, d in commands.items()
@@ -117,8 +117,10 @@ def _ask(url, request, job, transport) -> tuple[dict, dict, int]:
     return {"choice": choice, "target": target, "noul": noul}, answers, tokens
 
 
-def _fill(request, job, endpoint, kind, target, escape, effort, transport):
-    commands = _commands()
+def _fill(
+    request, job, endpoint, kind, target, escape, effort, transport, descriptions=None
+):
+    commands = _commands(descriptions)
     fixed = None if kind == "add_source" else {"source_id": {"enum": [target]}}
     tools = [tool(kind, commands[kind], fixed)]
     if escape:
@@ -173,6 +175,7 @@ def route(
     llm_transport: httpx2.BaseTransport | None = None,
     composite_min: float | None = COMPOSITE_MIN,
     target_margin: float | None = TARGET_MARGIN,
+    descriptions: dict | None = None,
 ) -> Routed:
     start = time.perf_counter()
     try:
@@ -215,6 +218,7 @@ def route(
             escape,
             reasoning_effort,
             llm_transport,
+            descriptions,
         )
         tokens += prompt
     else:

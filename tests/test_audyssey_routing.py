@@ -332,6 +332,13 @@ class ToolsRouterTests(unittest.TestCase):
         )
         self.assertIn("plan", add_source["function"]["parameters"]["properties"])
 
+    def test_real_route_uses_descriptions_override(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.route(descriptions=d)
+        tools = {t["function"]["name"]: t for t in self.requests[0]["tools"]}
+        self.assertIn("OVERRIDE-WHEN-SENTENCE", tools["drop"]["function"]["description"])
+
     def test_system_prompt_does_not_repeat_descriptions(self):
         self.route()
         system = self.requests[0]["messages"][0]["content"]
@@ -423,6 +430,23 @@ class CacheKeyTests(unittest.TestCase):
         want = Path("cache") / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
         self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools"), want)
         self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools", salt=""), want)
+
+    def test_cache_key_follows_descriptions(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+
+        a = {"version": 1, "commands": {"keep": {"when": "a"}}}
+        b = {"version": 1, "commands": {"keep": {"when": "b"}}}
+        p = Path("cache")
+        paths = {
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=d) for d in (None, a, b)
+        }
+        self.assertEqual(len(paths), 3)
+        self.assertEqual(
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=a),
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=dict(a)),
+        )
 
     def test_salt_changes_cache_file(self):
         from pathlib import Path
@@ -580,6 +604,14 @@ class HybridTests(unittest.TestCase):
             decision_transport=httpx2.MockTransport(self.decide),
             llm_transport=httpx2.MockTransport(self.llm),
             **kwargs,
+        )
+
+    def test_hybrid_questions_use_descriptions_override(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.assertIn(
+            "OVERRIDE-WHEN-SENTENCE",
+            hybrid._questions(make_job(), d)["decision"]["criteria"]["drop"],
         )
 
     def test_stage_one_only_commands_skip_the_llm(self):

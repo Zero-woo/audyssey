@@ -334,6 +334,13 @@ def _descriptions() -> tuple[str, int]:
     return hashlib.sha256(raw).hexdigest(), json.loads(raw)["version"]
 
 
+def descriptions_sha(descriptions: dict | None) -> str:
+    if descriptions is None:
+        return _descriptions()[0]
+    text = json.dumps(descriptions, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def _cache_file(
     cache: Path,
     model: str,
@@ -342,9 +349,10 @@ def _cache_file(
     fmt: str,
     effort: str | None = None,
     salt: str = "",
+    descriptions: dict | None = None,
 ) -> Path:
     ids = [salt, case_id] if salt else [case_id]
-    key = json.dumps([model, fmt, effort, _descriptions()[0], *ids, rep])
+    key = json.dumps([model, fmt, effort, descriptions_sha(descriptions), *ids, rep])
     return cache / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
 
 
@@ -356,9 +364,12 @@ def uncached_calls(
     fmt: str = "tools",
     effort: str | None = None,
     salt: str = "",
+    descriptions: dict | None = None,
 ) -> int:
     return sum(
-        not _cache_file(cache, model, c.id, rep, fmt, effort, salt).exists()
+        not _cache_file(
+            cache, model, c.id, rep, fmt, effort, salt, descriptions
+        ).exists()
         for c in cases
         for rep in range(k)
     )
@@ -395,12 +406,13 @@ def _run_one(
     guard: bool = False,
     effort: str | None = None,
     salt: str = "",
+    descriptions: dict | None = None,
 ) -> Run:
     hit: dict
     path = (
         None
         if cache is None
-        else _cache_file(cache, model, case.id, rep, fmt, effort, salt)
+        else _cache_file(cache, model, case.id, rep, fmt, effort, salt, descriptions)
     )
     if path is not None and path.exists():
         hit = json.loads(path.read_text())
@@ -500,6 +512,7 @@ def run_eval(
     guard: bool = False,
     effort: str | None = None,
     salt: str = "",
+    descriptions: dict | None = None,
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
     if out.exists():
@@ -507,14 +520,27 @@ def run_eval(
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
         _run_one(
-            router, model, c, jobs[c.fixture], rep, cache, fmt, guard, effort, salt
+            router,
+            model,
+            c,
+            jobs[c.fixture],
+            rep,
+            cache,
+            fmt,
+            guard,
+            effort,
+            salt,
+            descriptions,
         )
         for c in cases
         for rep in range(k)
     ]
     m = metrics(runs)
     out.mkdir(parents=True)
-    sha, version = _descriptions()
+    sha = descriptions_sha(descriptions)
+    version = (
+        _descriptions()[1] if descriptions is None else descriptions.get("version")
+    )
     (out / "cases.jsonl").write_text(
         "".join(
             json.dumps(
