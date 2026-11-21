@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Literal
 
 import httpx2
 from langsmith import tracing_context
@@ -34,6 +35,9 @@ QUESTIONS = {
     "unsupported": "그 편집은 지원하지 않습니다. 다른 방법으로 해 볼까요?",
     "other": "무엇을 바꿀지 다시 말씀해 주시겠어요?",
 }
+COMPOSITE_MIN: float | None = None
+TARGET_MARGIN: float | None = None
+TARGETED_KINDS = {"keep", "drop", "set_gain", "set_pitch", "reseparate", "generate"}
 VALUE = {"set_gain", "set_pitch", "add_source"}
 TARGETED = {"keep": Keep, "drop": Drop, "reseparate": Reseparate, "generate": Generate}
 
@@ -70,7 +74,28 @@ def _questions(job: Job) -> dict:
             "type": "noul",
             "instructions": "요청이 residual stem(잔여 소리)도 따로 내보내라고 하나요?",
         },
+        "composite": {
+            "type": "noul",
+            "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
+        },
     }
+
+
+def override(
+    kind: str,
+    answers: dict,
+    composite_min: float | None,
+    target_margin: float | None,
+) -> Literal["composite", "ambiguous_target"] | None:
+    if kind == "none" or kind.startswith("clarify_"):
+        return None
+    if composite_min is not None and answers["composite"]["noul"] >= composite_min:
+        return "composite"
+    if target_margin is not None and kind in TARGETED_KINDS:
+        top = sorted(answers["target"]["probabilities"].values(), reverse=True)
+        if len(top) > 1 and top[0] - top[1] < target_margin:
+            return "ambiguous_target"
+    return None
 
 
 def _ask(url, request, job, transport) -> tuple[dict, dict, int]:
@@ -146,6 +171,8 @@ def route(
     reasoning_effort: str | None = None,
     decision_transport: httpx2.BaseTransport | None = None,
     llm_transport: httpx2.BaseTransport | None = None,
+    composite_min: float | None = COMPOSITE_MIN,
+    target_margin: float | None = TARGET_MARGIN,
 ) -> Routed:
     start = time.perf_counter()
     try:
@@ -158,7 +185,16 @@ def route(
     kind, target = answer["choice"], answer["target"]
     out_tokens = 0
     decision, error = None, None
-    if kind == "none":
+    try:
+        rule = override(kind, raw, composite_min, target_margin)
+    except (KeyError, TypeError, AttributeError):
+        ms = (time.perf_counter() - start) * 1000
+        return Routed(None, "decision server failed", ms, tokens, 0, raw=raw)
+    if rule:
+        decision = parse_decision(
+            {"type": "clarify", "reason": rule, "question": QUESTIONS[rule]}
+        )
+    elif kind == "none":
         decision = NoCommand()
     elif kind.startswith("clarify_") and kind.removeprefix("clarify_") in QUESTIONS:
         reason = kind.removeprefix("clarify_")
