@@ -73,7 +73,7 @@ def _questions(job: Job) -> dict:
     }
 
 
-def _ask(url, request, job, transport) -> tuple[dict, int]:
+def _ask(url, request, job, transport) -> tuple[dict, dict, int]:
     body = {
         "model": "x",
         "state": {"job": summarize(job), "request": request},
@@ -89,7 +89,7 @@ def _ask(url, request, job, transport) -> tuple[dict, int]:
         raise TypeError("decision server answered a non-string choice")
     noul = float(answers["residual_stem"]["noul"])
     tokens = int(out.get("usage", {}).get("input_tokens", 0))
-    return {"choice": choice, "target": target, "noul": noul}, tokens
+    return {"choice": choice, "target": target, "noul": noul}, answers, tokens
 
 
 def _fill(request, job, endpoint, kind, target, escape, effort, transport):
@@ -149,7 +149,7 @@ def route(
 ) -> Routed:
     start = time.perf_counter()
     try:
-        answer, tokens = _ask(decision_url, request, job, decision_transport)
+        answer, raw, tokens = _ask(decision_url, request, job, decision_transport)
     except (ValueError, KeyError, TypeError, AttributeError):
         # A malformed answer is the model's; transport errors propagate so the
         # eval does not cache them. No request text in the error.
@@ -184,4 +184,4 @@ def route(
     else:
         error = "decision server failed"
     ms = (time.perf_counter() - start) * 1000
-    return Routed(decision, error, ms, tokens, out_tokens)
+    return Routed(decision, error, ms, tokens, out_tokens, raw=raw)

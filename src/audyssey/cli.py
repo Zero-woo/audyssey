@@ -17,7 +17,7 @@ from audyssey.routing_eval import (
     uncached_calls,
 )
 from audyssey.settings import Settings
-from audyssey.tools.routing import load_router, model_name
+from audyssey.tools.routing import cache_salt, load_router, model_name
 from audyssey.toolserver import create_tool_app
 
 
@@ -98,10 +98,11 @@ def eval_routing(
         raise fail(exc.errors()[0]["msg"]) from None
     model = model_name(settings)
     effort = settings.router_reasoning_effort
+    salt = cache_salt(router)
     cache = cases.parent / "cache"
     if router != "stub":
         calls = uncached_calls(
-            model, selected, k, cache, settings.router_format, effort
+            model, selected, k, cache, settings.router_format, effort, salt
         )
         if not yes:
             raise fail(
@@ -129,6 +130,7 @@ def eval_routing(
         settings.router_format,
         guard,
         effort,
+        salt,
     )
     if router != "stub" and split == "test":
         entry = {

@@ -411,9 +411,27 @@ class RunEvalTests(unittest.TestCase):
             self.assertEqual(
                 set(json.loads(lines[0])),
                 {"id", "rep", "request", "expected", "decision", "error", "invalid",
-                 "correct", "latency_ms", "input_tokens", "output_tokens", "guarded"},
+                 "correct", "latency_ms", "input_tokens", "output_tokens", "guarded", "raw"},
             )
             self.assertIn("macro-F1", (tmp / "out" / "summary.md").read_text())
+
+    def test_run_eval_writes_raw(self) -> None:
+        raw = {"decision": {"choice": "none"}}
+
+        def router(request: str, job: Job) -> Routed:
+            return Routed(parse_decision(NONE), None, 5.0, 100, 2, raw=raw)
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            run_eval(router, "m", "real", cases, tmp / "fixtures", 1, tmp / "o1", tmp / "cache")
+            line = json.loads((tmp / "o1" / "cases.jsonl").read_text().splitlines()[0])
+            self.assertEqual(line["raw"], raw)
+            (cached,) = (tmp / "cache").glob("*.json")
+            self.assertEqual(json.loads(cached.read_text())["raw"], raw)
+            run_eval(CountingRouter(), "m", "real", cases, tmp / "fixtures", 1, tmp / "o2", tmp / "cache")
+            line = json.loads((tmp / "o2" / "cases.jsonl").read_text().splitlines()[0])
+            self.assertEqual(line["raw"], raw)
 
     def test_second_run_uses_cache(self) -> None:
         with tempfile.TemporaryDirectory() as d:

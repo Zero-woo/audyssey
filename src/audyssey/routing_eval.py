@@ -185,6 +185,7 @@ class Run:
     input_tokens: int
     output_tokens: int
     guarded: bool = False
+    raw: dict | None = None
     broke: bool = False  # raw answer was correct, guarded one is not
 
 
@@ -319,9 +320,16 @@ def _descriptions() -> tuple[str, int]:
 
 
 def _cache_file(
-    cache: Path, model: str, case_id: str, rep: int, fmt: str, effort: str | None = None
+    cache: Path,
+    model: str,
+    case_id: str,
+    rep: int,
+    fmt: str,
+    effort: str | None = None,
+    salt: str = "",
 ) -> Path:
-    key = json.dumps([model, fmt, effort, _descriptions()[0], case_id, rep])
+    ids = [salt, case_id] if salt else [case_id]
+    key = json.dumps([model, fmt, effort, _descriptions()[0], *ids, rep])
     return cache / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
 
 
@@ -332,9 +340,10 @@ def uncached_calls(
     cache: Path,
     fmt: str = "tools",
     effort: str | None = None,
+    salt: str = "",
 ) -> int:
     return sum(
-        not _cache_file(cache, model, c.id, rep, fmt, effort).exists()
+        not _cache_file(cache, model, c.id, rep, fmt, effort, salt).exists()
         for c in cases
         for rep in range(k)
     )
@@ -370,10 +379,13 @@ def _run_one(
     fmt: str,
     guard: bool = False,
     effort: str | None = None,
+    salt: str = "",
 ) -> Run:
     hit: dict
     path = (
-        None if cache is None else _cache_file(cache, model, case.id, rep, fmt, effort)
+        None
+        if cache is None
+        else _cache_file(cache, model, case.id, rep, fmt, effort, salt)
     )
     if path is not None and path.exists():
         hit = json.loads(path.read_text())
@@ -384,6 +396,7 @@ def _run_one(
             if routed.decision is None
             else routed.decision.model_dump(),
             **{f: getattr(routed, f) for f in _CACHED_FIELDS},
+            "raw": routed.raw,
         }
         if cache is not None and path is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -405,6 +418,7 @@ def _run_one(
         input_tokens=hit["input_tokens"],
         output_tokens=hit["output_tokens"],
         guarded=guarded,
+        raw=hit.get("raw"),
         broke=raw_ok and not correct(decision, case),
     )
 
@@ -470,13 +484,16 @@ def run_eval(
     fmt: str = "tools",
     guard: bool = False,
     effort: str | None = None,
+    salt: str = "",
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
     if out.exists():
         raise FileExistsError(out)
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
-        _run_one(router, model, c, jobs[c.fixture], rep, cache, fmt, guard, effort)
+        _run_one(
+            router, model, c, jobs[c.fixture], rep, cache, fmt, guard, effort, salt
+        )
         for c in cases
         for rep in range(k)
     ]
@@ -499,6 +516,7 @@ def run_eval(
                     "input_tokens": r.input_tokens,
                     "output_tokens": r.output_tokens,
                     "guarded": r.guarded,
+                    "raw": r.raw,
                 },
                 ensure_ascii=False,
             )

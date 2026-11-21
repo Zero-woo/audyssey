@@ -413,6 +413,31 @@ class CacheKeyTests(unittest.TestCase):
         }
         self.assertEqual(len(keys), 3)
 
+    def test_cache_key_unchanged_without_salt(self):
+        import hashlib
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file, _descriptions
+
+        key = json.dumps(["m", "tools", None, _descriptions()[0], "c1", 0])
+        want = Path("cache") / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
+        self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools"), want)
+        self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools", salt=""), want)
+
+    def test_salt_changes_cache_file(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+        from audyssey.tools.routing import cache_salt
+
+        root = Path("cache")
+        self.assertNotEqual(
+            _cache_file(root, "m", "c1", 0, "tools", salt="a"),
+            _cache_file(root, "m", "c1", 0, "tools", salt="b"),
+        )
+        self.assertEqual(cache_salt("real"), "")
+        self.assertRegex(cache_salt("hybrid"), r"^[0-9a-f]{12}$")
+
 def routed(decision) -> Routed:
     return Routed(decision, None, 7.0, 11, 3)
 
@@ -653,6 +678,19 @@ class HybridTests(unittest.TestCase):
                 routed = self.route()
                 self.assertIsNone(routed.decision)
                 self.assertEqual(routed.error, "decision server failed")
+
+    def test_hybrid_keeps_raw_answers(self):
+        self.choice = "none"
+        routed = self.route()
+        answer = {"type": "choice", "confidence": 1.0, "probabilities": {}}
+        self.assertEqual(
+            routed.raw,
+            {
+                "decision": {**answer, "choice": "none"},
+                "target": {**answer, "choice": "s1"},
+                "residual_stem": {"type": "noul", "noul": 0.3},
+            },
+        )
 
     def test_latency_and_tokens_are_summed(self):
         routed = self.route()
