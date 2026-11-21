@@ -332,6 +332,13 @@ class ToolsRouterTests(unittest.TestCase):
         )
         self.assertIn("plan", add_source["function"]["parameters"]["properties"])
 
+    def test_real_route_uses_descriptions_override(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.route(descriptions=d)
+        tools = {t["function"]["name"]: t for t in self.requests[0]["tools"]}
+        self.assertIn("OVERRIDE-WHEN-SENTENCE", tools["drop"]["function"]["description"])
+
     def test_system_prompt_does_not_repeat_descriptions(self):
         self.route()
         system = self.requests[0]["messages"][0]["content"]
@@ -413,6 +420,48 @@ class CacheKeyTests(unittest.TestCase):
         }
         self.assertEqual(len(keys), 3)
 
+    def test_cache_key_unchanged_without_salt(self):
+        import hashlib
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file, _descriptions
+
+        key = json.dumps(["m", "tools", None, _descriptions()[0], "c1", 0])
+        want = Path("cache") / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
+        self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools"), want)
+        self.assertEqual(_cache_file(Path("cache"), "m", "c1", 0, "tools", salt=""), want)
+
+    def test_cache_key_follows_descriptions(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+
+        a = {"version": 1, "commands": {"keep": {"when": "a"}}}
+        b = {"version": 1, "commands": {"keep": {"when": "b"}}}
+        p = Path("cache")
+        paths = {
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=d) for d in (None, a, b)
+        }
+        self.assertEqual(len(paths), 3)
+        self.assertEqual(
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=a),
+            _cache_file(p, "m", "c1", 0, "tools", descriptions=dict(a)),
+        )
+
+    def test_salt_changes_cache_file(self):
+        from pathlib import Path
+
+        from audyssey.routing_eval import _cache_file
+        from audyssey.tools.routing import cache_salt
+
+        root = Path("cache")
+        self.assertNotEqual(
+            _cache_file(root, "m", "c1", 0, "tools", salt="a"),
+            _cache_file(root, "m", "c1", 0, "tools", salt="b"),
+        )
+        self.assertEqual(cache_salt("real"), "")
+        self.assertRegex(cache_salt("hybrid"), r"^[0-9a-f]{12}$")
+
 def routed(decision) -> Routed:
     return Routed(decision, None, 7.0, 11, 3)
 
@@ -488,6 +537,8 @@ class HybridTests(unittest.TestCase):
         self.choice = "set_gain"
         self.target = "s1"
         self.noul = 0.3
+        self.composite = 0.0
+        self.probabilities = {}
         self.calls = [("set_gain", {"source_id": "s1", "gain": 0.5})]
         self.endpoint = Settings(
             planner_base_url="http://test.invalid/v1",
@@ -505,8 +556,13 @@ class HybridTests(unittest.TestCase):
             json={
                 "answers": {
                     "decision": {**answer, "choice": self.choice},
-                    "target": {**answer, "choice": self.target},
+                    "target": {
+                        **answer,
+                        "choice": self.target,
+                        "probabilities": self.probabilities,
+                    },
                     "residual_stem": {"type": "noul", "noul": self.noul},
+                    "composite": {"type": "noul", "noul": self.composite},
                 },
                 "usage": {"input_tokens": 100},
             },
@@ -538,7 +594,7 @@ class HybridTests(unittest.TestCase):
             },
         )
 
-    def route(self, escape=False):
+    def route(self, escape=False, **kwargs):
         return hybrid.route(
             "dog 키워줘",
             make_job(),
@@ -547,7 +603,23 @@ class HybridTests(unittest.TestCase):
             escape=escape,
             decision_transport=httpx2.MockTransport(self.decide),
             llm_transport=httpx2.MockTransport(self.llm),
+            **kwargs,
         )
+
+    def test_hybrid_questions_use_descriptions_override(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.assertIn(
+            "OVERRIDE-WHEN-SENTENCE",
+            hybrid._questions(make_job(), d)["decision"]["criteria"]["drop"],
+        )
+
+    def test_route_sends_descriptions_override_to_decision_server(self):
+        d = {"commands": {k: dict(v) for k, v in _descriptions().items()}}
+        d["commands"]["drop"]["when"] = "OVERRIDE-WHEN-SENTENCE"
+        self.route(descriptions=d)
+        criteria = self.decision_requests[0]["questions"]["decision"]["criteria"]
+        self.assertIn("OVERRIDE-WHEN-SENTENCE", criteria["drop"])
 
     def test_stage_one_only_commands_skip_the_llm(self):
         cases = [
@@ -592,6 +664,19 @@ class HybridTests(unittest.TestCase):
             },
         )
         self.assertEqual(questions["residual_stem"]["type"], "noul")
+        self.assertEqual(set(questions), {"decision", "target", "residual_stem"})
+
+    def test_composite_question_only_when_rule_on(self):
+        self.choice = "none"
+        wire = {
+            "type": "noul",
+            "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
+        }
+        self.route(composite_min=0.5)
+        self.assertEqual(self.decision_requests[-1]["questions"]["composite"], wire)
+        with patch.object(hybrid, "ASK_COMPOSITE", True):
+            self.route()
+        self.assertEqual(self.decision_requests[-1]["questions"]["composite"], wire)
 
     def test_set_gain_fills_value_with_one_tool(self):
         routed = self.route()
@@ -653,6 +738,61 @@ class HybridTests(unittest.TestCase):
                 routed = self.route()
                 self.assertIsNone(routed.decision)
                 self.assertEqual(routed.error, "decision server failed")
+
+    def test_hybrid_keeps_raw_answers(self):
+        self.choice = "none"
+        routed = self.route()
+        answer = {"type": "choice", "confidence": 1.0, "probabilities": {}}
+        self.assertEqual(
+            routed.raw,
+            {
+                "decision": {**answer, "choice": "none"},
+                "target": {**answer, "choice": "s1"},
+                "residual_stem": {"type": "noul", "noul": 0.3},
+                "composite": {"type": "noul", "noul": 0.0},
+            },
+        )
+
+    def test_override_table(self):
+        two = {"s1": 0.9, "s2": 0.1}
+        tie = {"s1": 0.5, "s2": 0.5}
+        cases = [
+            ("set_gain", 0.9, two, 0.5, None, "composite"),
+            ("set_gain", 0.4, two, 0.5, None, None),
+            ("none", 0.9, {}, 0.5, None, None),
+            ("clarify_missing_value", 0.9, {}, 0.5, None, None),
+            ("drop", 0.1, {"s1": 0.48, "s2": 0.45, "s3": 0.07}, None, 0.2,
+             "ambiguous_target"),
+            ("drop", 0.1, {"s1": 0.8, "s2": 0.1}, None, 0.2, None),
+            ("render", 0.1, tie, None, 0.2, None),
+            ("add_source", 0.1, tie, None, 0.2, None),
+            ("drop", 0.9, tie, 0.5, 0.2, "composite"),
+            ("drop", 0.9, tie, None, None, None),
+        ]
+        for kind, noul, probs, cmin, margin, expected in cases:
+            with self.subTest(kind=kind, noul=noul, cmin=cmin, margin=margin):
+                answers = {
+                    "composite": {"noul": noul},
+                    "target": {"probabilities": probs},
+                }
+                self.assertEqual(hybrid.override(kind, answers, cmin, margin), expected)
+
+    def test_override_turns_into_clarify_without_llm(self):
+        self.composite = 0.9
+        routed = self.route(composite_min=0.5)
+        self.assertEqual(
+            routed.decision,
+            Clarify(reason="composite", question=hybrid.QUESTIONS["composite"]),
+        )
+        self.assertEqual(self.llm_requests, [])
+        self.assertIsNotNone(routed.raw)
+
+    def test_rules_off_by_default(self):
+        self.composite = 0.99
+        self.probabilities = {"s1": 0.5, "s2": 0.5}
+        routed = self.route()
+        self.assertEqual(routed.decision, SetGain(source_id="s1", gain=0.5))
+        self.assertEqual(len(self.llm_requests), 1)
 
     def test_latency_and_tokens_are_summed(self):
         routed = self.route()

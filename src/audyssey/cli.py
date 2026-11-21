@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
@@ -16,8 +17,10 @@ from audyssey.routing_eval import (
     run_eval,
     uncached_calls,
 )
+from audyssey.routing_improve import improve
 from audyssey.settings import Settings
-from audyssey.tools.routing import load_router, model_name
+from audyssey.tools.routing import cache_salt, load_router, model_name
+from audyssey.tools.routing.real import route as real_route
 from audyssey.toolserver import create_tool_app
 
 
@@ -98,10 +101,11 @@ def eval_routing(
         raise fail(exc.errors()[0]["msg"]) from None
     model = model_name(settings)
     effort = settings.router_reasoning_effort
+    salt = cache_salt(router)
     cache = cases.parent / "cache"
     if router != "stub":
         calls = uncached_calls(
-            model, selected, k, cache, settings.router_format, effort
+            model, selected, k, cache, settings.router_format, effort, salt
         )
         if not yes:
             raise fail(
@@ -129,6 +133,7 @@ def eval_routing(
         settings.router_format,
         guard,
         effort,
+        salt,
     )
     if router != "stub" and split == "test":
         entry = {
@@ -139,6 +144,78 @@ def eval_routing(
         }
         with log.open("a") as f:
             f.write(json.dumps(entry) + "\n")
+    typer.echo(f"wrote {out}")
+
+
+@app.command()
+def improve_routing(
+    out: Annotated[Path, typer.Option()],
+    rounds: int = 5,
+    yes: bool = False,
+    cases: Path = Path("evals/routing/cases.jsonl"),
+    fixtures: Path = Path("evals/routing/fixtures"),
+) -> None:
+    """Rewrite the routing descriptions from train failures; adopt on dev."""
+
+    def fail(message: str) -> typer.Exit:
+        typer.echo(message)
+        return typer.Exit(1)
+
+    if out.exists():
+        raise fail(f"{out} already exists; results are never overwritten")
+    all_cases = load_cases(cases)
+    if any(c.split is None for c in all_cases):
+        raise fail("some cases have no split; run assign_splits first")
+    train = [c for c in all_cases if c.split == "train"]
+    dev = [c for c in all_cases if c.split == "dev"]
+    if not train or not dev:
+        raise fail("train and dev splits must both have cases")
+    variables = {
+        "base_url": "AUDYSSEY_IMPROVER_BASE_URL",
+        "model": "AUDYSSEY_IMPROVER_MODEL",
+        "api_key": "AUDYSSEY_IMPROVER_API_KEY",
+    }
+    for name in variables.values():
+        if not os.environ.get(name):
+            raise fail(f"{name} is required")
+    router_calls = len(dev) + rounds * (len(train) + len(dev))
+    if not yes:
+        raise fail(
+            f"up to {router_calls} router calls and {rounds} improver calls; "
+            "rerun with --yes to pay for them"
+        )
+    try:
+        settings = Settings(router="real", router_guard=False)
+        endpoint = settings.router_endpoint()
+        improver = (
+            Settings()
+            .planner_endpoint()
+            .model_copy(
+                update={"api": "openai"}
+                | {k: os.environ[v] for k, v in variables.items()}
+            )
+        )
+    except ValidationError as exc:
+        # The message only: the full error echoes the input, which can hold keys.
+        raise fail(exc.errors()[0]["msg"]) from None
+    effort, fmt = settings.router_reasoning_effort, settings.router_format
+    improve(
+        lambda d: (
+            lambda request, job: real_route(
+                request, job, endpoint, reasoning_effort=effort, fmt=fmt, descriptions=d
+            )
+        ),
+        model_name(settings),
+        improver,
+        train,
+        dev,
+        fixtures,
+        cases.parent / "cache",
+        out,
+        rounds,
+        fmt=fmt,
+        effort=effort,
+    )
     typer.echo(f"wrote {out}")
 
 

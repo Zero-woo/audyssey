@@ -60,7 +60,9 @@ MODELS = {
 }
 
 
-def _commands() -> dict:
+def _commands(descriptions: dict | None = None) -> dict:
+    if descriptions is not None:
+        return descriptions["commands"]
     raw = importlib.resources.files("audyssey.tools.routing").joinpath(
         "descriptions.json"
     )
@@ -102,12 +104,12 @@ def tool(name: str, d: dict, fixed: dict | None = None) -> ChatCompletionToolPar
     }
 
 
-def _tools() -> list[ChatCompletionToolParam]:
-    return [tool(name, d) for name, d in _commands().items()]
+def _tools(descriptions: dict | None = None) -> list[ChatCompletionToolParam]:
+    return [tool(name, d) for name, d in _commands(descriptions).items()]
 
 
-def _system_prompt() -> str:
-    commands = _commands()
+def _system_prompt(descriptions: dict | None = None) -> str:
+    commands = _commands(descriptions)
     lines = [
         "당신은 영상 오디오 편집 요청을 명령 하나로 바꾸는 라우터입니다. 명령을 실행하지 않고 고르기만 합니다.",
         "",
@@ -167,10 +169,14 @@ def route(
     transport: httpx2.BaseTransport | None = None,
     reasoning_effort: str | None = None,
     fmt: str = "tools",
+    descriptions: dict | None = None,
 ) -> Routed:
     use_tools = fmt == "tools"
     messages: list[ChatCompletionMessageParam] = [
-        {"role": "system", "content": TOOLS_PROMPT if use_tools else _system_prompt()},
+        {
+            "role": "system",
+            "content": TOOLS_PROMPT if use_tools else _system_prompt(descriptions),
+        },
         {
             "role": "user",
             "content": json.dumps(
@@ -188,7 +194,7 @@ def route(
                 model=endpoint.model,
                 messages=messages,
                 temperature=0,
-                tools=_tools(),
+                tools=_tools(descriptions),
                 tool_choice="required",
                 extra_body=extra_body,
             )

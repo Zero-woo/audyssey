@@ -1,6 +1,8 @@
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from importlib import import_module
+from pathlib import Path
 
 from audyssey import graph
 from audyssey.contracts import Clarify, Job, NoCommand, RouteDecision
@@ -15,6 +17,7 @@ class Routed:
     input_tokens: int
     output_tokens: int
     guarded: bool = False  # the guard replaced the model's answer
+    raw: dict | None = None  # the decision server's answers, hybrid only
 
 
 def summarize(job: Job) -> dict:
@@ -85,6 +88,14 @@ def model_name(settings: Settings) -> str:
         return model
     escape = "+escape" if settings.router_hybrid_escape else ""
     return f"hybrid[{settings.router_decision_model}+{model}{escape}]"
+
+
+def cache_salt(router: str) -> str:
+    """Keys the hybrid eval cache to its routing code; other routers need none."""
+    if router != "hybrid":
+        return ""
+    source = Path(__file__).with_name("hybrid.py").read_bytes()
+    return hashlib.sha256(source).hexdigest()[:12]
 
 
 def load_router(settings: Settings) -> Callable[[str, Job], Routed]:

@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Literal
 
 import httpx2
 from langsmith import tracing_context
@@ -34,6 +35,11 @@ QUESTIONS = {
     "unsupported": "그 편집은 지원하지 않습니다. 다른 방법으로 해 볼까요?",
     "other": "무엇을 바꿀지 다시 말씀해 주시겠어요?",
 }
+COMPOSITE_MIN: float | None = None
+# A sweep run sets this True to collect the composite answer with the rule off.
+ASK_COMPOSITE: bool = False
+TARGET_MARGIN: float | None = None
+TARGETED_KINDS = {"keep", "drop", "set_gain", "set_pitch", "reseparate", "generate"}
 VALUE = {"set_gain", "set_pitch", "add_source"}
 TARGETED = {"keep": Keep, "drop": Drop, "reseparate": Reseparate, "generate": Generate}
 
@@ -42,8 +48,10 @@ VALUE_PROMPT = """당신은 영상 오디오 편집 요청에서 명령의 값�
 ESCAPE_PROMPT = "\n요청에 양이 없거나 모호하면 clarify를 호출합니다."
 
 
-def _questions(job: Job) -> dict:
-    commands = _commands()
+def _questions(
+    job: Job, descriptions: dict | None = None, composite_min: float | None = None
+) -> dict:
+    commands = _commands(descriptions)
     options = {
         name: f"{d['when']} {d['instead']}"
         for name, d in commands.items()
@@ -55,7 +63,7 @@ def _questions(job: Job) -> dict:
         s.id: f"{s.plan.name} ({s.plan.kind}, {'켜짐' if s.keep else '꺼짐'})"
         for s in job.sources
     } | {"residual": "residual: 분리되지 않고 남은 나머지 소리"}
-    return {
+    questions = {
         "decision": {
             "type": "choice",
             "instructions": "사용자 요청(request)을 처리할 편집 명령 하나를 고르세요.",
@@ -71,13 +79,38 @@ def _questions(job: Job) -> dict:
             "instructions": "요청이 residual stem(잔여 소리)도 따로 내보내라고 하나요?",
         },
     }
+    if ASK_COMPOSITE or composite_min is not None:
+        questions["composite"] = {
+            "type": "noul",
+            "instructions": "요청(request)에 서로 다른 편집이 둘 이상 들어 있나요?",
+        }
+    return questions
 
 
-def _ask(url, request, job, transport) -> tuple[dict, int]:
+def override(
+    kind: str,
+    answers: dict,
+    composite_min: float | None,
+    target_margin: float | None,
+) -> Literal["composite", "ambiguous_target"] | None:
+    if kind == "none" or kind.startswith("clarify_"):
+        return None
+    if composite_min is not None and answers["composite"]["noul"] >= composite_min:
+        return "composite"
+    if target_margin is not None and kind in TARGETED_KINDS:
+        top = sorted(answers["target"]["probabilities"].values(), reverse=True)
+        if len(top) > 1 and top[0] - top[1] < target_margin:
+            return "ambiguous_target"
+    return None
+
+
+def _ask(
+    url, request, job, transport, descriptions=None, composite_min=None
+) -> tuple[dict, dict, int]:
     body = {
         "model": "x",
         "state": {"job": summarize(job), "request": request},
-        "questions": _questions(job),
+        "questions": _questions(job, descriptions, composite_min),
     }
     with httpx2.Client(transport=transport, timeout=60) as client:
         response = client.post(f"{url.rstrip('/')}/v1/systemone", json=body)
@@ -89,11 +122,13 @@ def _ask(url, request, job, transport) -> tuple[dict, int]:
         raise TypeError("decision server answered a non-string choice")
     noul = float(answers["residual_stem"]["noul"])
     tokens = int(out.get("usage", {}).get("input_tokens", 0))
-    return {"choice": choice, "target": target, "noul": noul}, tokens
+    return {"choice": choice, "target": target, "noul": noul}, answers, tokens
 
 
-def _fill(request, job, endpoint, kind, target, escape, effort, transport):
-    commands = _commands()
+def _fill(
+    request, job, endpoint, kind, target, escape, effort, transport, descriptions=None
+):
+    commands = _commands(descriptions)
     fixed = None if kind == "add_source" else {"source_id": {"enum": [target]}}
     tools = [tool(kind, commands[kind], fixed)]
     if escape:
@@ -146,10 +181,15 @@ def route(
     reasoning_effort: str | None = None,
     decision_transport: httpx2.BaseTransport | None = None,
     llm_transport: httpx2.BaseTransport | None = None,
+    composite_min: float | None = COMPOSITE_MIN,
+    target_margin: float | None = TARGET_MARGIN,
+    descriptions: dict | None = None,
 ) -> Routed:
     start = time.perf_counter()
     try:
-        answer, tokens = _ask(decision_url, request, job, decision_transport)
+        answer, raw, tokens = _ask(
+            decision_url, request, job, decision_transport, descriptions, composite_min
+        )
     except (ValueError, KeyError, TypeError, AttributeError):
         # A malformed answer is the model's; transport errors propagate so the
         # eval does not cache them. No request text in the error.
@@ -158,7 +198,16 @@ def route(
     kind, target = answer["choice"], answer["target"]
     out_tokens = 0
     decision, error = None, None
-    if kind == "none":
+    try:
+        rule = override(kind, raw, composite_min, target_margin)
+    except (KeyError, TypeError, AttributeError):
+        ms = (time.perf_counter() - start) * 1000
+        return Routed(None, "decision server failed", ms, tokens, 0, raw=raw)
+    if rule:
+        decision = parse_decision(
+            {"type": "clarify", "reason": rule, "question": QUESTIONS[rule]}
+        )
+    elif kind == "none":
         decision = NoCommand()
     elif kind.startswith("clarify_") and kind.removeprefix("clarify_") in QUESTIONS:
         reason = kind.removeprefix("clarify_")
@@ -179,9 +228,10 @@ def route(
             escape,
             reasoning_effort,
             llm_transport,
+            descriptions,
         )
         tokens += prompt
     else:
         error = "decision server failed"
     ms = (time.perf_counter() - start) * 1000
-    return Routed(decision, error, ms, tokens, out_tokens)
+    return Routed(decision, error, ms, tokens, out_tokens, raw=raw)
