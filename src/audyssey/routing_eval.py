@@ -290,6 +290,21 @@ def metrics(runs: list[Run]) -> dict:
     }
 
 
+def adopt(new: dict, old: dict) -> list[str]:
+    """Reasons a change fails the adoption rule; an empty list means adopt."""
+    fails = []
+    if new["macro_f1"] <= old["macro_f1"]:
+        fails.append("macro-F1 did not rise")
+    for label, o in old["per_label"].items():
+        n = new["per_label"][label]["recall"]
+        if o["recall"] is not None and n is not None and o["recall"] - n > 0.03 + 1e-9:
+            fails.append(f"{label} recall fell {o['recall']:.3f} -> {n:.3f}")
+    o, n = old["none_suppression"], new["none_suppression"]
+    if o is not None and n is not None and n < o:
+        fails.append(f"none_suppression fell {o:.3f} -> {n:.3f}")
+    return fails
+
+
 def bootstrap_ci(runs: list[Run], n: int = 2000, seed: int = 0) -> tuple[float, float]:
     """95% percentile CI of macro-F1, resampling templates with replacement."""
     by_template: dict[str, list[Run]] = defaultdict(list)

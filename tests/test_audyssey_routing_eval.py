@@ -11,6 +11,7 @@ from audyssey.contracts import Job, parse_decision
 from audyssey.routing_eval import (
     Case,
     Run,
+    adopt,
     assign_splits,
     blank_labels,
     bootstrap_ci,
@@ -546,3 +547,27 @@ class RunEvalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AdoptTests(unittest.TestCase):
+    def m(self, f1=0.8, ns=0.9, recall=None) -> dict:
+        per = {k: {"recall": v} for k, v in (recall or {}).items()}
+        return {"macro_f1": f1, "none_suppression": ns, "per_label": per}
+
+    def test_equal_f1_rejected(self) -> None:
+        self.assertEqual(adopt(self.m(), self.m()), ["macro-F1 did not rise"])
+
+    def test_recall_drop(self) -> None:
+        old, new = self.m(0.8, recall={"keep": 0.9}), self.m(0.9, recall={"keep": 0.86})
+        (msg,) = adopt(new, old)
+        self.assertIn("keep", msg)
+        self.assertEqual(adopt(self.m(0.9, recall={"keep": 0.87}), old), [])
+
+    def test_none_suppression_drop(self) -> None:
+        (msg,) = adopt(self.m(0.9, ns=0.8), self.m(0.8, ns=0.9))
+        self.assertIn("none_suppression", msg)
+
+    def test_none_recall_skipped(self) -> None:
+        old = self.m(0.8, recall={"keep": None, "drop": 0.9})
+        new = self.m(0.9, recall={"keep": 0.1, "drop": None})
+        self.assertEqual(adopt(new, old), [])
