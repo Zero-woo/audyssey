@@ -11,10 +11,13 @@ from audyssey.contracts import Job, parse_decision
 from audyssey.routing_eval import (
     Case,
     Run,
+    adopt,
     assign_splits,
     blank_labels,
+    DESCRIPTIONS,
     bootstrap_ci,
     correct,
+    descriptions_sha,
     kappa,
     load_cases,
     load_fixture,
@@ -411,9 +414,27 @@ class RunEvalTests(unittest.TestCase):
             self.assertEqual(
                 set(json.loads(lines[0])),
                 {"id", "rep", "request", "expected", "decision", "error", "invalid",
-                 "correct", "latency_ms", "input_tokens", "output_tokens", "guarded"},
+                 "correct", "latency_ms", "input_tokens", "output_tokens", "guarded", "raw"},
             )
             self.assertIn("macro-F1", (tmp / "out" / "summary.md").read_text())
+
+    def test_run_eval_writes_raw(self) -> None:
+        raw = {"decision": {"choice": "none"}}
+
+        def router(request: str, job: Job) -> Routed:
+            return Routed(parse_decision(NONE), None, 5.0, 100, 2, raw=raw)
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _, cases = setup_eval(tmp, 1)
+            run_eval(router, "m", "real", cases, tmp / "fixtures", 1, tmp / "o1", tmp / "cache")
+            line = json.loads((tmp / "o1" / "cases.jsonl").read_text().splitlines()[0])
+            self.assertEqual(line["raw"], raw)
+            (cached,) = (tmp / "cache").glob("*.json")
+            self.assertEqual(json.loads(cached.read_text())["raw"], raw)
+            run_eval(CountingRouter(), "m", "real", cases, tmp / "fixtures", 1, tmp / "o2", tmp / "cache")
+            line = json.loads((tmp / "o2" / "cases.jsonl").read_text().splitlines()[0])
+            self.assertEqual(line["raw"], raw)
 
     def test_second_run_uses_cache(self) -> None:
         with tempfile.TemporaryDirectory() as d:
@@ -524,6 +545,38 @@ class RunEvalTests(unittest.TestCase):
                 run_eval(router, "m", "stub", cases, tmp / "fixtures", 1, tmp / out, None)
             self.assertEqual(router.calls, 2)
             self.assertFalse((tmp / "cache").exists())
+
+
+class AdoptTests(unittest.TestCase):
+    def m(self, f1=0.8, ns=0.9, recall=None) -> dict:
+        per = {k: {"recall": v} for k, v in (recall or {}).items()}
+        return {"macro_f1": f1, "none_suppression": ns, "per_label": per}
+
+    def test_equal_f1_rejected(self) -> None:
+        self.assertEqual(adopt(self.m(), self.m()), ["macro-F1 did not rise"])
+
+    def test_recall_drop(self) -> None:
+        old, new = self.m(0.8, recall={"keep": 0.9}), self.m(0.9, recall={"keep": 0.86})
+        (msg,) = adopt(new, old)
+        self.assertIn("keep", msg)
+        self.assertEqual(adopt(self.m(0.9, recall={"keep": 0.87}), old), [])
+
+    def test_none_suppression_drop(self) -> None:
+        (msg,) = adopt(self.m(0.9, ns=0.8), self.m(0.8, ns=0.9))
+        self.assertIn("none_suppression", msg)
+
+    def test_none_recall_skipped(self) -> None:
+        old = self.m(0.8, recall={"keep": None, "drop": 0.9})
+        new = self.m(0.9, recall={"keep": 0.1, "drop": None})
+        self.assertEqual(adopt(new, old), [])
+
+
+class DescriptionsShaTests(unittest.TestCase):
+    def test_equal_dict_same_sha_as_none(self) -> None:
+        data = json.loads(DESCRIPTIONS.read_bytes())
+        self.assertEqual(descriptions_sha(data), descriptions_sha(None))
+        data["version"] += 1
+        self.assertNotEqual(descriptions_sha(data), descriptions_sha(None))
 
 
 if __name__ == "__main__":

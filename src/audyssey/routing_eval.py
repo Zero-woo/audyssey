@@ -185,6 +185,7 @@ class Run:
     input_tokens: int
     output_tokens: int
     guarded: bool = False
+    raw: dict | None = None
     broke: bool = False  # raw answer was correct, guarded one is not
 
 
@@ -289,6 +290,21 @@ def metrics(runs: list[Run]) -> dict:
     }
 
 
+def adopt(new: dict, old: dict) -> list[str]:
+    """Reasons a change fails the adoption rule; an empty list means adopt."""
+    fails = []
+    if new["macro_f1"] <= old["macro_f1"]:
+        fails.append("macro-F1 did not rise")
+    for label, o in old["per_label"].items():
+        n = new["per_label"][label]["recall"]
+        if o["recall"] is not None and n is not None and o["recall"] - n > 0.03 + 1e-9:
+            fails.append(f"{label} recall fell {o['recall']:.3f} -> {n:.3f}")
+    o, n = old["none_suppression"], new["none_suppression"]
+    if o is not None and n is not None and n < o:
+        fails.append(f"none_suppression fell {o:.3f} -> {n:.3f}")
+    return fails
+
+
 def bootstrap_ci(runs: list[Run], n: int = 2000, seed: int = 0) -> tuple[float, float]:
     """95% percentile CI of macro-F1, resampling templates with replacement."""
     by_template: dict[str, list[Run]] = defaultdict(list)
@@ -318,10 +334,27 @@ def _descriptions() -> tuple[str, int]:
     return hashlib.sha256(raw).hexdigest(), json.loads(raw)["version"]
 
 
+def descriptions_sha(descriptions: dict | None) -> str:
+    if descriptions is None:
+        return _descriptions()[0]
+    if descriptions == json.loads(DESCRIPTIONS.read_bytes()):
+        return _descriptions()[0]
+    text = json.dumps(descriptions, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def _cache_file(
-    cache: Path, model: str, case_id: str, rep: int, fmt: str, effort: str | None = None
+    cache: Path,
+    model: str,
+    case_id: str,
+    rep: int,
+    fmt: str,
+    effort: str | None = None,
+    salt: str = "",
+    descriptions: dict | None = None,
 ) -> Path:
-    key = json.dumps([model, fmt, effort, _descriptions()[0], case_id, rep])
+    ids = [salt, case_id] if salt else [case_id]
+    key = json.dumps([model, fmt, effort, descriptions_sha(descriptions), *ids, rep])
     return cache / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
 
 
@@ -332,9 +365,13 @@ def uncached_calls(
     cache: Path,
     fmt: str = "tools",
     effort: str | None = None,
+    salt: str = "",
+    descriptions: dict | None = None,
 ) -> int:
     return sum(
-        not _cache_file(cache, model, c.id, rep, fmt, effort).exists()
+        not _cache_file(
+            cache, model, c.id, rep, fmt, effort, salt, descriptions
+        ).exists()
         for c in cases
         for rep in range(k)
     )
@@ -370,10 +407,14 @@ def _run_one(
     fmt: str,
     guard: bool = False,
     effort: str | None = None,
+    salt: str = "",
+    descriptions: dict | None = None,
 ) -> Run:
     hit: dict
     path = (
-        None if cache is None else _cache_file(cache, model, case.id, rep, fmt, effort)
+        None
+        if cache is None
+        else _cache_file(cache, model, case.id, rep, fmt, effort, salt, descriptions)
     )
     if path is not None and path.exists():
         hit = json.loads(path.read_text())
@@ -384,6 +425,7 @@ def _run_one(
             if routed.decision is None
             else routed.decision.model_dump(),
             **{f: getattr(routed, f) for f in _CACHED_FIELDS},
+            "raw": routed.raw,
         }
         if cache is not None and path is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -405,6 +447,7 @@ def _run_one(
         input_tokens=hit["input_tokens"],
         output_tokens=hit["output_tokens"],
         guarded=guarded,
+        raw=hit.get("raw"),
         broke=raw_ok and not correct(decision, case),
     )
 
@@ -470,19 +513,36 @@ def run_eval(
     fmt: str = "tools",
     guard: bool = False,
     effort: str | None = None,
+    salt: str = "",
+    descriptions: dict | None = None,
 ) -> dict:
     """Route every case k times (cached), grade, and write results to a new out dir."""
     if out.exists():
         raise FileExistsError(out)
     jobs = {c.fixture: load_fixture(fixtures, c.fixture) for c in cases}
     runs = [
-        _run_one(router, model, c, jobs[c.fixture], rep, cache, fmt, guard, effort)
+        _run_one(
+            router,
+            model,
+            c,
+            jobs[c.fixture],
+            rep,
+            cache,
+            fmt,
+            guard,
+            effort,
+            salt,
+            descriptions,
+        )
         for c in cases
         for rep in range(k)
     ]
     m = metrics(runs)
     out.mkdir(parents=True)
-    sha, version = _descriptions()
+    sha = descriptions_sha(descriptions)
+    version = (
+        _descriptions()[1] if descriptions is None else descriptions.get("version")
+    )
     (out / "cases.jsonl").write_text(
         "".join(
             json.dumps(
@@ -499,6 +559,7 @@ def run_eval(
                     "input_tokens": r.input_tokens,
                     "output_tokens": r.output_tokens,
                     "guarded": r.guarded,
+                    "raw": r.raw,
                 },
                 ensure_ascii=False,
             )
