@@ -603,13 +603,6 @@ class HybridTests(unittest.TestCase):
                 self.assertIsNone(routed.error)
         self.assertEqual(self.llm_requests, [])
 
-    def test_generated_source_label(self):
-        base = make_job().sources[0]
-        gen = base.model_copy(update={"origin": "generated", "replaces": "s1"})
-        self.assertEqual(hybrid._target_label(gen), "dog (sfx, 생성: s1 대체, 켜짐)")
-        gen = base.model_copy(update={"origin": "generated", "replaces": None})
-        self.assertEqual(hybrid._target_label(gen), "dog (sfx, 생성, 켜짐)")
-
     def test_decision_request_wire_format(self):
         self.choice = "none"
         self.route()
@@ -626,9 +619,9 @@ class HybridTests(unittest.TestCase):
         self.assertEqual(
             questions["target"]["criteria"],
             {
-                "s1": "dog (sfx, 원본 분리, 켜짐)",
-                "s2": "car (sfx, 원본 분리, 켜짐)",
-                "residual": hybrid.RESIDUAL_LABEL,
+                "s1": "dog (sfx, 켜짐)",
+                "s2": "car (sfx, 켜짐)",
+                "residual": "residual: 분리되지 않고 남은 나머지 소리",
             },
         )
         self.assertEqual(questions["residual_stem"]["type"], "noul")

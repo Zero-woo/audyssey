@@ -14,7 +14,6 @@ from audyssey.contracts import (
     NoCommand,
     Render,
     Reseparate,
-    Source,
     parse_decision,
 )
 from audyssey.settings import LLMEndpoint
@@ -47,21 +46,6 @@ VALUE_PROMPT = """당신은 영상 오디오 편집 요청에서 명령의 값�
 ESCAPE_PROMPT = "\n요청에 양이 없거나 모호하면 clarify를 호출합니다."
 
 
-RESIDUAL_LABEL = (
-    "residual: 분리되지 않고 남은 나머지 소리 (나머지, 남은 소리, 분리 안 된 소리)"
-)
-
-
-def _target_label(source: Source) -> str:
-    if source.origin == "separated":
-        origin = "원본 분리"
-    elif source.replaces:
-        origin = f"생성: {source.replaces} 대체"
-    else:
-        origin = "생성"
-    return f"{source.plan.name} ({source.plan.kind}, {origin}, {'켜짐' if source.keep else '꺼짐'})"
-
-
 def _questions(job: Job) -> dict:
     commands = _commands()
     options = {
@@ -71,9 +55,10 @@ def _questions(job: Job) -> dict:
     }
     options |= {f"clarify_{r}": f"되물어야 함: {t}" for r, t in REASONS.items()}
     options["none"] = f"{commands['none']['when']} {commands['none']['instead']}"
-    targets = {s.id: _target_label(s) for s in job.sources} | {
-        "residual": RESIDUAL_LABEL
-    }
+    targets = {
+        s.id: f"{s.plan.name} ({s.plan.kind}, {'켜짐' if s.keep else '꺼짐'})"
+        for s in job.sources
+    } | {"residual": "residual: 분리되지 않고 남은 나머지 소리"}
     return {
         "decision": {
             "type": "choice",
